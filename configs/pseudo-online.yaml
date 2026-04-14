@@ -1,0 +1,59 @@
+data:
+  image_root: data/raw/csiro-biomass
+  image_size: 1024
+  black_padding_probability: 0.2
+  train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
+  test_manifest: data/processed/csiro-biomass/metadata/test_wide.parquet
+  test_long_manifest: data/processed/csiro-biomass/metadata/test_long.parquet
+  fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+
+pseudo:
+  output_dir: artifacts/pseudo-online
+  initial_teacher_checkpoints:
+    - artifacts/supervised/member_1/best.pt
+    - artifacts/supervised/member_2/best.pt
+    - artifacts/supervised/member_3/best.pt
+    - artifacts/supervised/member_4/best.pt
+  student_template:
+    data:
+      image_root: data/raw/csiro-biomass
+      image_size: 1024
+      black_padding_probability: 0.2
+      train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
+      fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+    model:
+      backbone_name: dinov3_vitl16
+      backbone_source: torchhub
+      backbone_repo: facebookresearch/dinov3
+      pretrained: true
+      fusion_dim: 1024
+      trunk_dim: 1024
+      num_attention_heads: 8
+      dropout: 0.1
+    train:
+      output_dir: artifacts/pseudo-online/template
+      valid_fold: 0
+      seed: 42
+      batch_size: 8
+      num_workers: 8
+      amp: true
+      cls_weight: 0.3
+      stages:
+        - freeze_backbone: false
+          optimizer:
+            name: adamw
+            lr: 3.0e-5
+            weight_decay: 1.0e-4
+          scheduler:
+            name: cosine
+            epochs: 4
+            warmup_steps: 10
+  rounds:
+    - student_backbone_name: dinov3_vitl16
+      student_backbone_source: torchhub
+      num_models: 2
+      teacher_weights: [1.0, 1.0, 1.0, 1.0]
+    - student_backbone_name: dinov3_vitb16
+      student_backbone_source: torchhub
+      num_models: 2
+      teacher_weights: [1.0, 1.0]

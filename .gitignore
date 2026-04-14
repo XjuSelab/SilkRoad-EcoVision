@@ -1,10 +1,55 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
+# uv / virtualenv
+.venv/
+uv.lock
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editors and OS noise
+.idea/
+.vscode/
+.DS_Store
+.codex
+
+# Secrets and local config
+.env
+.env.*
+secrets/
+
+# Data and artifacts
+data/raw/
+data/processed/
+artifacts/
+outputs/
+logs/
+runs/
+wandb/
+mlruns/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+*.engine
+
+# Local reference assets
+csiro-biomass.zip
+csiro-biomass.html
+data-view.html

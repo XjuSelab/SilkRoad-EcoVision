@@ -1,0 +1,20 @@
+data:
+  image_root: data/raw/csiro-biomass
+  image_size: 1024
+  test_manifest: data/processed/csiro-biomass/metadata/test_wide.parquet
+  test_long_manifest: data/processed/csiro-biomass/metadata/test_long.parquet
+
+infer:
+  output_dir: outputs/final-ensemble
+  batch_size: 4
+  num_workers: 4
+  apply_postprocess: true
+  members:
+    - checkpoint: artifacts/pseudo-online/round1/student_1/best.pt
+      weight: 0.2
+    - checkpoint: artifacts/pseudo-online/round1/student_2/best.pt
+      weight: 0.2
+    - checkpoint: artifacts/pseudo-online/round2/student_1/best.pt
+      weight: 0.3
+    - checkpoint: artifacts/pseudo-online/round2/student_2/best.pt
+      weight: 0.3

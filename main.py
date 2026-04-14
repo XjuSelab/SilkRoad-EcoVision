@@ -1,5 +1,12 @@
-def main():
-    print("Hello from silkroad-ecovision!")
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from csiro_biomass.cli.main import main
 
 
 if __name__ == "__main__":
