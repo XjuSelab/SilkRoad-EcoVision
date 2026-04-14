@@ -8,5 +8,7 @@
   - `refactor:`
   - `style:`
   - `chore:`
+  - `docs:`
 - Prefer the smallest matching type for the actual change.
+- Use `docs:` for documentation-only changes.
 - Keep the remainder of the subject line concise and action-oriented.
