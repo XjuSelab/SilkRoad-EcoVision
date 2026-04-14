@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pandas as pd
 import torch
-from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from csiro_biomass.data.dataset import CSIROBiomassDataset, DatasetConfig
@@ -75,6 +74,7 @@ def run_training(config: dict) -> None:
             backbone_source=config["model"].get("backbone_source", "torchhub"),
             backbone_repo=config["model"].get("backbone_repo", "facebookresearch/dinov3"),
             pretrained=bool(config["model"].get("pretrained", True)),
+            hf_endpoint=config["model"].get("hf_endpoint"),
             fusion_dim=int(config["model"].get("fusion_dim", 1024)),
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
             num_attention_heads=int(config["model"].get("num_attention_heads", 8)),
@@ -89,7 +89,7 @@ def run_training(config: dict) -> None:
         )
 
     criterion = WeightedBiomassLoss(cls_weight=float(config["train"].get("cls_weight", 0.3)))
-    scaler = GradScaler(enabled=device.type == "cuda")
+    scaler = torch.amp.GradScaler(device.type, enabled=device.type == "cuda")
     output_dir = ensure_dir(config["train"]["output_dir"])
     history: list[dict] = []
     best_score = float("-inf")

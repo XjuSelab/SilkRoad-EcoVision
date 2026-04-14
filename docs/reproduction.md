@@ -6,6 +6,7 @@
 - Local environment: `.venv`
 - Code sync: local push to GitHub, server `git pull`
 - Lock file policy: `uv.lock` not committed
+- Hugging Face mirror: recommend `HF_ENDPOINT=https://hf-mirror.com` for local debugging
 
 ## Data Layout
 

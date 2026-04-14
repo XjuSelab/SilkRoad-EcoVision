@@ -25,6 +25,7 @@ def load_model_from_checkpoint(checkpoint_path: str | Path, device: torch.device
             backbone_source=config["model"].get("backbone_source", "torchhub"),
             backbone_repo=config["model"].get("backbone_repo", "facebookresearch/dinov3"),
             pretrained=False,
+            hf_endpoint=config["model"].get("hf_endpoint"),
             fusion_dim=int(config["model"].get("fusion_dim", 1024)),
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
             num_attention_heads=int(config["model"].get("num_attention_heads", 8)),

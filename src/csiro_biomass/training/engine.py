@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
-from torch.cuda.amp import GradScaler
 from tqdm.auto import tqdm
 
 from csiro_biomass.data.constants import TARGET_COLUMNS
@@ -83,7 +82,7 @@ def _run_epoch(
     device: torch.device,
     optimizer: torch.optim.Optimizer | None,
     scheduler,
-    scaler: GradScaler,
+    scaler: torch.amp.GradScaler,
     amp_enabled: bool,
 ) -> EpochResult:
     is_training = optimizer is not None
@@ -148,7 +147,7 @@ def _run_epoch(
 
 
 def train_one_epoch(**kwargs) -> EpochResult:
-    return _run_epoch(optimizer=kwargs["optimizer"], **kwargs)
+    return _run_epoch(**kwargs)
 
 
 def evaluate_one_epoch(**kwargs) -> EpochResult:

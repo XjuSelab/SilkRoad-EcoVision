@@ -1,0 +1,44 @@
+data:
+  image_root: data/raw/csiro-biomass
+  image_size: 224
+  black_padding_probability: 0.1
+  train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
+  fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+
+model:
+  backbone_name: vit_small_patch16_224
+  backbone_source: timm
+  pretrained: true
+  hf_endpoint: https://hf-mirror.com
+  fusion_dim: 384
+  trunk_dim: 384
+  num_attention_heads: 6
+  dropout: 0.1
+
+train:
+  output_dir: artifacts/local-debug/vits224_fold0
+  valid_fold: 0
+  seed: 42
+  batch_size: 8
+  num_workers: 4
+  amp: true
+  cls_weight: 0.3
+  stages:
+    - freeze_backbone: true
+      optimizer:
+        name: adamw
+        lr: 3.0e-4
+        weight_decay: 1.0e-4
+      scheduler:
+        name: cosine
+        epochs: 1
+        warmup_steps: 5
+    - freeze_backbone: false
+      optimizer:
+        name: adamw
+        lr: 1.0e-4
+        weight_decay: 1.0e-4
+      scheduler:
+        name: cosine
+        epochs: 1
+        warmup_steps: 5

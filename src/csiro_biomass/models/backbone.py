@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from typing import Any
 
 import torch
 from torch import nn
@@ -15,6 +15,7 @@ class BackboneConfig:
     source: str = "torchhub"
     repo: str = "facebookresearch/dinov3"
     pretrained: bool = True
+    hf_endpoint: str | None = None
 
 
 class BackboneAdapter(nn.Module):
@@ -51,6 +52,10 @@ def _infer_feature_dim(backbone: nn.Module) -> int:
 
 
 def create_backbone(config: BackboneConfig) -> BackboneAdapter:
+    if config.hf_endpoint:
+        # timm/huggingface_hub respects HF_ENDPOINT for model downloads.
+        os.environ["HF_ENDPOINT"] = config.hf_endpoint
+
     source = config.source.lower()
     if source == "torchhub":
         backbone = torch.hub.load(config.repo, config.name, pretrained=config.pretrained)
