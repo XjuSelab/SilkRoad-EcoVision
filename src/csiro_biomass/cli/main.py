@@ -26,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     infer = subparsers.add_parser("infer", help="Run ensemble inference")
     infer.add_argument("--config", required=True)
+
+    oof = subparsers.add_parser("oof", help="Aggregate OOF runs or select teachers")
+    oof.add_argument("oof_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -48,6 +51,12 @@ def main() -> None:
         from csiro_biomass.inference.predict import run_inference
 
         run_inference(load_yaml_config(args.config))
+    elif args.command == "oof":
+        from csiro_biomass.training import oof as oof_module
+        import sys
+
+        sys.argv = ["csiro-biomass-oof", *args.oof_args]
+        oof_module.main()
     else:
         parser.error(f"Unsupported command: {args.command}")
 

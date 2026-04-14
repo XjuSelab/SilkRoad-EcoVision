@@ -55,6 +55,33 @@ uv run csiro-biomass train-pseudo --config configs/pseudo-online.yaml
 uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 ```
 
+## Server Sweep
+
+服务端冲分主线配置在 `configs/server/`。
+
+示例：
+
+```bash
+uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896.yaml
+```
+
+聚合 OOF：
+
+```bash
+uv run csiro-biomass oof aggregate \
+  --experiment-root artifacts/server/dinov3-vitl-896 \
+  --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet
+```
+
+跨实验选择 teacher：
+
+```bash
+uv run csiro-biomass oof select \
+  --experiment-root artifacts/server/dinov3-vitl-896 \
+  --experiment-root artifacts/server/dinov3-vitl-1024 \
+  --output-dir artifacts/server/teacher-selection
+```
+
 ## Repository Rules
 
 - 依赖由 `uv` 管理，不提交 `uv.lock`。

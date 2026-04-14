@@ -72,9 +72,38 @@ class DualStreamBiomassModel(nn.Module):
             {target: build_three_layer_head(config.trunk_dim, 7, config.dropout) for target in TARGET_COLUMNS}
         )
 
-    def freeze_backbone(self, frozen: bool) -> None:
+    def freeze_backbone(
+        self,
+        frozen: bool,
+        *,
+        unfreeze_last_n_blocks: int = 0,
+        unfreeze_norm: bool = True,
+        unfreeze_pos_embed: bool = True,
+    ) -> None:
         for parameter in self.backbone.parameters():
             parameter.requires_grad = not frozen
+        if frozen or unfreeze_last_n_blocks <= 0:
+            return
+
+        inner_backbone = self.backbone.backbone
+        blocks = getattr(inner_backbone, "blocks", None)
+        if isinstance(blocks, nn.ModuleList) and len(blocks) > 0:
+            for block in blocks[-unfreeze_last_n_blocks:]:
+                for parameter in block.parameters():
+                    parameter.requires_grad = True
+
+        if unfreeze_norm:
+            for name in ("norm", "fc_norm", "head_norm"):
+                module = getattr(inner_backbone, name, None)
+                if isinstance(module, nn.Module):
+                    for parameter in module.parameters():
+                        parameter.requires_grad = True
+
+        if unfreeze_pos_embed:
+            for attribute in ("pos_embed", "cls_token", "dist_token"):
+                tensor = getattr(inner_backbone, attribute, None)
+                if isinstance(tensor, nn.Parameter):
+                    tensor.requires_grad = True
 
     def forward(self, left_image: torch.Tensor, right_image: torch.Tensor) -> dict[str, torch.Tensor]:
         left_features = self.backbone(left_image)

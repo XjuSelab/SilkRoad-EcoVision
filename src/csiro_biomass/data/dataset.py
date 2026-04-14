@@ -18,6 +18,15 @@ from torch.utils.data import Dataset
 from csiro_biomass.data.constants import BORDERS_DICT, TARGET_COLUMNS
 
 
+INTERPOLATION_MAP = {
+    "nearest": cv2.INTER_NEAREST,
+    "bilinear": cv2.INTER_LINEAR,
+    "bicubic": cv2.INTER_CUBIC,
+    "area": cv2.INTER_AREA,
+    "lanczos": cv2.INTER_LANCZOS4,
+}
+
+
 def split_left_right(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     midpoint = image.shape[1] // 2
     return image[:, :midpoint].copy(), image[:, midpoint:].copy()
@@ -38,7 +47,17 @@ def apply_random_black_padding(image: np.ndarray, probability: float = 0.2) -> n
     return background
 
 
-def build_train_transforms(image_size: int) -> A.Compose:
+def _resolve_interpolation(name: str) -> int:
+    return INTERPOLATION_MAP.get(name.lower(), cv2.INTER_CUBIC)
+
+
+def build_train_transforms(
+    image_size: int,
+    *,
+    mean: tuple[float, float, float],
+    std: tuple[float, float, float],
+    interpolation: str,
+) -> A.Compose:
     return A.Compose(
         [
             A.HorizontalFlip(p=0.5),
@@ -49,18 +68,24 @@ def build_train_transforms(image_size: int) -> A.Compose:
             A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=20, p=0.5),
             A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
             A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.75),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            A.Resize(image_size, image_size),
+            A.Normalize(mean=mean, std=std),
+            A.Resize(image_size, image_size, interpolation=_resolve_interpolation(interpolation)),
             ToTensorV2(),
         ]
     )
 
 
-def build_eval_transforms(image_size: int) -> A.Compose:
+def build_eval_transforms(
+    image_size: int,
+    *,
+    mean: tuple[float, float, float],
+    std: tuple[float, float, float],
+    interpolation: str,
+) -> A.Compose:
     return A.Compose(
         [
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            A.Resize(image_size, image_size),
+            A.Normalize(mean=mean, std=std),
+            A.Resize(image_size, image_size, interpolation=_resolve_interpolation(interpolation)),
             ToTensorV2(),
         ]
     )
@@ -80,6 +105,9 @@ class DatasetConfig:
     image_size: int
     train: bool
     black_padding_probability: float = 0.2
+    mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
+    std: tuple[float, float, float] = (0.229, 0.224, 0.225)
+    interpolation: str = "bicubic"
 
 
 class CSIROBiomassDataset(Dataset):
@@ -88,9 +116,19 @@ class CSIROBiomassDataset(Dataset):
         self.config = config
         self.image_root = Path(config.image_root)
         self.transforms = (
-            build_train_transforms(config.image_size)
+            build_train_transforms(
+                config.image_size,
+                mean=config.mean,
+                std=config.std,
+                interpolation=config.interpolation,
+            )
             if config.train
-            else build_eval_transforms(config.image_size)
+            else build_eval_transforms(
+                config.image_size,
+                mean=config.mean,
+                std=config.std,
+                interpolation=config.interpolation,
+            )
         )
 
     def __len__(self) -> int:

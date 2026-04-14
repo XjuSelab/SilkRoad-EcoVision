@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 from torch import nn
@@ -19,10 +20,15 @@ class BackboneConfig:
 
 
 class BackboneAdapter(nn.Module):
-    def __init__(self, backbone: nn.Module):
+    def __init__(self, backbone: nn.Module, data_config: dict[str, Any] | None = None):
         super().__init__()
         self.backbone = backbone
         self.feature_dim = _infer_feature_dim(backbone)
+        self.data_config = data_config or {
+            "mean": (0.485, 0.456, 0.406),
+            "std": (0.229, 0.224, 0.225),
+            "interpolation": "bicubic",
+        }
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         if hasattr(self.backbone, "forward_features"):
@@ -59,11 +65,23 @@ def create_backbone(config: BackboneConfig) -> BackboneAdapter:
     source = config.source.lower()
     if source == "torchhub":
         backbone = torch.hub.load(config.repo, config.name, pretrained=config.pretrained)
+        data_config = {
+            "mean": (0.485, 0.456, 0.406),
+            "std": (0.229, 0.224, 0.225),
+            "interpolation": "bicubic",
+        }
     elif source == "timm":
         import timm
+        from timm.data import resolve_model_data_config
 
         backbone = timm.create_model(config.name, pretrained=config.pretrained, num_classes=0)
+        raw_data_config = resolve_model_data_config(backbone)
+        data_config = {
+            "mean": tuple(raw_data_config.get("mean", (0.485, 0.456, 0.406))),
+            "std": tuple(raw_data_config.get("std", (0.229, 0.224, 0.225))),
+            "interpolation": raw_data_config.get("interpolation", "bicubic"),
+        }
     else:
         raise ValueError(f"Unsupported backbone source: {config.source}")
 
-    return BackboneAdapter(backbone)
+    return BackboneAdapter(backbone, data_config=data_config)

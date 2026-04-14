@@ -84,6 +84,7 @@ def _run_epoch(
     scheduler,
     scaler: torch.amp.GradScaler,
     amp_enabled: bool,
+    grad_accum_steps: int = 1,
 ) -> EpochResult:
     is_training = optimizer is not None
     model.train(is_training)
@@ -96,15 +97,13 @@ def _run_epoch(
     all_image_ids: list[str] = []
 
     progress = tqdm(dataloader, disable=False)
-    for batch in progress:
+    optimizer.zero_grad(set_to_none=True) if is_training else None
+    for batch_index, batch in enumerate(progress):
         left_image = batch["left_image"].to(device, non_blocking=True)
         right_image = batch["right_image"].to(device, non_blocking=True)
         targets = batch["targets"].to(device, non_blocking=True)
         cls_labels = batch["cls_labels"].to(device, non_blocking=True)
         image_ids = batch["image_id"]
-
-        if is_training:
-            optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(
             device_type=device.type,
@@ -115,11 +114,15 @@ def _run_epoch(
             loss_output = criterion(outputs, targets, cls_labels)
 
         if is_training:
-            scaler.scale(loss_output.total).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            if scheduler is not None:
-                scheduler.step()
+            scaled_loss = loss_output.total / grad_accum_steps
+            scaler.scale(scaled_loss).backward()
+            should_step = (batch_index + 1) % grad_accum_steps == 0 or (batch_index + 1) == len(dataloader)
+            if should_step:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                if scheduler is not None:
+                    scheduler.step()
 
         predictions = _collect_batch_predictions(outputs).detach().float().cpu()
         all_predictions.append(predictions)
