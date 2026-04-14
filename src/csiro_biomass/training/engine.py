@@ -121,7 +121,7 @@ def _run_epoch(
             if scheduler is not None:
                 scheduler.step()
 
-        predictions = _collect_batch_predictions(outputs).detach().cpu()
+        predictions = _collect_batch_predictions(outputs).detach().float().cpu()
         all_predictions.append(predictions)
         all_targets.append(targets.detach().cpu())
         all_image_ids.extend(image_ids)

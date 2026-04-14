@@ -30,11 +30,11 @@ class ModelConfig:
     backbone_source: str
     backbone_repo: str
     pretrained: bool
-    hf_endpoint: str | None = None
     fusion_dim: int
     trunk_dim: int
     num_attention_heads: int
     dropout: float
+    hf_endpoint: str | None = None
 
 
 class DualStreamBiomassModel(nn.Module):
