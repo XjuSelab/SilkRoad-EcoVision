@@ -134,6 +134,28 @@
 | --- | --- | --- | --- |
 | P2 | `dinov3-vitl-1024` | `configs/server/supervised-dinov3-vitl-1024.yaml` | 更接近冠军题解主力尺寸，但在 `L40` 上风险较高 |
 
+## H200 下一批强候选
+
+以下配置是为 `H200` 扩展准备的下一批强候选，优先走 `timm` 路线，不再优先依赖 `torchhub`。
+
+| 优先级 | 实验 | 配置 | 目的 |
+| --- | --- | --- | --- |
+| P0 | `dinov3-vitl-1024-timm` | `configs/server/supervised-dinov3-vitl-1024-timm.yaml` | 高分辨率 `DINOv3-L`，优先争夺新主力 |
+| P0 | `dinov3-vithplus-896-timm` | `configs/server/supervised-dinov3-vithplus-896-timm.yaml` | 测试更大 `DINOv3-H+` 是否显著强于 `ViT-L` |
+| P1 | `dinov2-vitl-reg4-518` | `configs/server/supervised-dinov2-vitl-reg4-518.yaml` | 验证 `reg4` 版本是否优于普通 `DINOv2-L` |
+| P1 | `dinov2-vitg-reg4-518` | `configs/server/supervised-dinov2-vitg-reg4-518.yaml` | 验证更大 `reg4` 版本是否值得额外算力 |
+| P1 | `siglip-so400m-gap-448` | `configs/server/supervised-siglip-so400m-gap-448.yaml` | 测试 `gap` 变体是否优于当前 `siglip 448` |
+| P1 | `siglip-so400m-gap-896` | `configs/server/supervised-siglip-so400m-gap-896.yaml` | 测试高分辨率 `SigLIP GAP` 的上限 |
+
+推荐试验顺序：
+
+1. `dinov3-vitl-1024-timm`
+2. `dinov3-vithplus-896-timm`
+3. `dinov2-vitl-reg4-518`
+4. `dinov2-vitg-reg4-518`
+5. `siglip-so400m-gap-448`
+6. `siglip-so400m-gap-896`
+
 ## 4xL40 建议启动方式
 
 ### 先决条件
@@ -179,6 +201,29 @@ CUDA_VISIBLE_DEVICES=3 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass tr
 
 - `dinov2-vitg-518` 风险中等
 - `dinov3-vitl-1024` 在 `L40 48GB` 上风险最高
+
+### H200 建议启动方式
+
+如果 `H200` 空出来，优先从这两条开始：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-1024-timm.yaml > logs.dinov3-vitl-1024.timm.txt 2>&1 &
+CUDA_VISIBLE_DEVICES=1 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vithplus-896-timm.yaml > logs.dinov3-vithplus-896.timm.txt 2>&1 &
+```
+
+第二批再补：
+
+```bash
+CUDA_VISIBLE_DEVICES=2 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov2-vitl-reg4-518.yaml > logs.dinov2-vitl-reg4-518.txt 2>&1 &
+CUDA_VISIBLE_DEVICES=3 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov2-vitg-reg4-518.yaml > logs.dinov2-vitg-reg4-518.txt 2>&1 &
+```
+
+如果还想继续探 `SigLIP` 上限，再补：
+
+```bash
+CUDA_VISIBLE_DEVICES=4 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-siglip-so400m-gap-448.yaml > logs.siglip-gap-448.txt 2>&1 &
+CUDA_VISIBLE_DEVICES=5 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-siglip-so400m-gap-896.yaml > logs.siglip-gap-896.txt 2>&1 &
+```
 
 ### 更稳妥的启动顺序
 

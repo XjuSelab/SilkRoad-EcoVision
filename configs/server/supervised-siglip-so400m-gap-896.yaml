@@ -1,0 +1,35 @@
+data:
+  image_root: data/raw/csiro-biomass
+  image_size: 896
+  black_padding_probability: 0.2
+  train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
+  fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+
+model:
+  backbone_name: vit_so400m_patch14_siglip_gap_896
+  backbone_source: timm
+  pretrained: true
+  hf_endpoint: https://hf-mirror.com
+  fusion_dim: 1152
+  trunk_dim: 1152
+  num_attention_heads: 8
+  dropout: 0.1
+
+train:
+  experiment_name: siglip-so400m-gap-896
+  output_dir: artifacts/server/siglip-so400m-gap-896
+  folds: [0, 1, 2]
+  seeds: [42, 3407]
+  batch_size: 2
+  grad_accum_steps: 8
+  num_workers: 8
+  amp: true
+  cls_weight: 0.3
+  stages:
+    - freeze_backbone: true
+      optimizer: {name: adamw, lr: 2.0e-4, weight_decay: 1.0e-4}
+      scheduler: {name: cosine, epochs: 5, warmup_steps: 20}
+    - freeze_backbone: false
+      unfreeze_last_n_blocks: 0
+      optimizer: {name: adamw, lr: 3.0e-5, weight_decay: 1.0e-4}
+      scheduler: {name: cosine, epochs: 12, warmup_steps: 30}
