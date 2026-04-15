@@ -32,6 +32,147 @@ artifacts/server/<experiment>/
 
 这样现有 `configs/` 和 CLI 都不用改。
 
+## 封装脚本与前置条件
+
+仓库里现在补了 3 个 Hugging Face 封装脚本：
+
+- `scripts/hf_upload.sh`
+- `scripts/hf_download_snapshot.py`
+- `scripts/hf_download_prefix.py`
+
+这 3 个脚本都保持官方主逻辑不变：
+
+- 上传继续调用 `hf upload`
+- 整仓下载继续调用 `snapshot_download`
+- 单文件夹下载继续调用 `HfApi.list_repo_files + hf_hub_download`
+
+### 需要什么依赖
+
+上传和下载至少需要下面几样东西：
+
+- `huggingface_hub`
+- `hf_xet`
+- `hf` CLI
+
+当前仓库已经依赖了 `huggingface_hub`。  
+在 `huggingface_hub >= 0.32` 的环境下，`hf_xet` 通常会一起安装，所以这里不要求额外再装 `git xet`。
+
+如果你的机器没有全局 `hf` 命令，也可以直接用：
+
+```bash
+uv run hf --version
+```
+
+当前这 3 个脚本里：
+
+- 上传脚本优先用全局 `hf`
+- 如果没有全局 `hf`，会自动回退到 `uv run hf`
+- 两个下载脚本直接用仓库环境里的 `huggingface_hub`
+
+### 登录方式
+
+推荐先登录一次 Hugging Face：
+
+```bash
+uv run hf auth login
+```
+
+或者提前导出：
+
+```bash
+export HF_TOKEN=...
+```
+
+### 速度相关环境变量
+
+当前更推荐的快速传输变量是：
+
+```bash
+export HF_XET_HIGH_PERFORMANCE=1
+```
+
+如果你之前见过：
+
+```bash
+HF_HUB_ENABLE_HF_TRANSFER=1
+```
+
+那是旧方案。当前这套脚本默认走 `hf_xet` 路线，不再依赖它。
+
+### 最快上传命令
+
+上传 `dataset` 仓库里的一个目录：
+
+```bash
+HF_XET_HIGH_PERFORMANCE=1 \
+bash scripts/hf_upload.sh \
+  --target dataset \
+  --local-path ./data/processed/csiro-biomass \
+  --path-in-repo csiro-biomass/processed/csiro-biomass
+```
+
+上传 `model` 仓库里的一个实验目录：
+
+```bash
+HF_XET_HIGH_PERFORMANCE=1 \
+bash scripts/hf_upload.sh \
+  --target model \
+  --local-path ./artifacts/server/dinov3-vitl-896 \
+  --path-in-repo server/dinov3-vitl-896
+```
+
+如果你就是想保留原始 `hf upload` 风格，也可以直接写成：
+
+```bash
+uv run hf upload \
+  XJU-SeLab/csiro-biomass-private \
+  ./data/processed/csiro-biomass \
+  csiro-biomass/processed/csiro-biomass \
+  --repo-type dataset
+```
+
+### 最快整仓下载命令
+
+下载整个 `dataset` 仓库到本地目录：
+
+```bash
+HF_ENDPOINT="https://hf-mirror.com" HF_XET_HIGH_PERFORMANCE=1 \
+uv run python scripts/hf_download_snapshot.py \
+  --target dataset \
+  --local-dir ./hf-downloads/csiro-biomass-private
+```
+
+下载整个 `model` 仓库到本地目录：
+
+```bash
+HF_ENDPOINT="https://hf-mirror.com" HF_XET_HIGH_PERFORMANCE=1 \
+uv run python scripts/hf_download_snapshot.py \
+  --target model \
+  --local-dir ./hf-downloads/csiro-biomass-server-models
+```
+
+### 最快单文件夹下载命令
+
+下载 `dataset` 仓库里的一个子目录：
+
+```bash
+HF_ENDPOINT="https://hf-mirror.com" HF_XET_HIGH_PERFORMANCE=1 \
+uv run python scripts/hf_download_prefix.py \
+  --target dataset \
+  --prefix csiro-biomass/processed/csiro-biomass/metadata \
+  --local-dir ./hf-downloads
+```
+
+下载 `model` 仓库里的一个实验子目录：
+
+```bash
+HF_ENDPOINT="https://hf-mirror.com" HF_XET_HIGH_PERFORMANCE=1 \
+uv run python scripts/hf_download_prefix.py \
+  --target model \
+  --prefix server/dinov3-vitl-896 \
+  --local-dir ./hf-downloads
+```
+
 ## `data/` 到底是什么
 
 `data/` 不是模型输出，而是训练和推理依赖的数据输入。
