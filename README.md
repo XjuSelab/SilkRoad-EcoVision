@@ -31,6 +31,15 @@ uv run csiro-biomass --help
 ## Workflow
 
 1. 把比赛原始压缩包放到 `data/raw/csiro-biomass.zip`，或在仓库根目录保留 `csiro-biomass.zip`。
+   如果要直接从 Hugging Face 下载当前备份的 zip 到仓库根目录，可以执行：
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com HF_XET_HIGH_PERFORMANCE=1 \
+uv run hf download XJU-SeLab/csiro-biomass-private csiro-biomass.zip \
+  --repo-type dataset \
+  --local-dir .
+```
+
 2. 生成宽表、fold 和 submission 模板：
 
 ```bash
