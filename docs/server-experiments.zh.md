@@ -33,6 +33,20 @@
 | `dinov2-vitl-518` | `configs/server/supervised-dinov2-vitl-518.yaml` | 已完成 | `0.4347` | 当前强基线，保留 |
 | `siglip-so400m-384` | `configs/server/supervised-siglip-so400m-384.yaml` | 已完成 | `0.0695` | 明显偏弱，暂时降级 |
 
+## 当前运行中实验
+
+| GPU | 实验 | 配置 | 当前状态 | 观察 |
+| --- | --- | --- | --- | --- |
+| `0` | `dinov2-vitg-518` | `configs/server/supervised-dinov2-vitg-518.yaml` | 运行中 | 约 `37G` 显存，占用较高但稳定 |
+| `1` | `dinov3-vitl-896-timm` | `configs/server/supervised-dinov3-vitl-896-timm.yaml` | 运行中 | 约 `34G` 显存，当前最值得关注 |
+| `2` | `siglip-so400m-448` | `configs/server/supervised-siglip-so400m-448.yaml` | 运行中 | 约 `18G` 显存，已确认 `448` 链路打通 |
+
+当前判断：
+
+- `dinov2-vitg-518`：主要用于测试更大 `DINOv2-G` 的上限
+- `dinov3-vitl-896-timm`：主力候选，最重要
+- `siglip-so400m-448`：用于判断 `siglip` 是否受限于 `384` 分辨率
+
 ### `dinov2-vitl-518`
 
 实验目录：
@@ -133,18 +147,32 @@ uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 
 ### 当前推荐并行启动
 
-如果 `GPU0` 和 `GPU1` 已经完成，那么下一步建议：
+如果当前卡位是：
 
-```bash
-CUDA_VISIBLE_DEVICES=2 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-siglip-so400m-448.yaml > logs.siglip-448.txt 2>&1 &
-CUDA_VISIBLE_DEVICES=3 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896.yaml > logs.dinov3-vitl-896.txt 2>&1 &
-```
+- `GPU0`: `dinov2-vitg-518`
+- `GPU1`: `dinov3-vitl-896-timm`
+- `GPU2`: `siglip-so400m-448`
 
-如果前两张卡空出来，也可以继续开：
+那么先不要再动这三张卡。
+
+如果后续需要重新启动，建议命令如下：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov2-vitg-518.yaml > logs.dinov2-vitg-518.txt 2>&1 &
-CUDA_VISIBLE_DEVICES=1 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-1024.yaml > logs.dinov3-vitl-1024.txt 2>&1 &
+CUDA_VISIBLE_DEVICES=1 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896-timm.yaml > logs.dinov3-vitl-896.timm.txt 2>&1 &
+CUDA_VISIBLE_DEVICES=2 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-siglip-so400m-448.yaml > logs.siglip-448.rerun.txt 2>&1 &
+```
+
+如果 `GPU3` 空闲，优先保留给：
+
+- 失败实验重跑
+- 跑完后补 `dinov3-vitl-1024`
+- 或后续补新的候选配置
+
+如果前面几张卡空出来，才建议继续开：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 HF_ENDPOINT=https://hf-mirror.com uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-1024.yaml > logs.dinov3-vitl-1024.txt 2>&1 &
 ```
 
 但要注意：
