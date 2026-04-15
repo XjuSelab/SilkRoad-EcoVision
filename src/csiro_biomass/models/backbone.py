@@ -17,6 +17,7 @@ class BackboneConfig:
     repo: str = "facebookresearch/dinov3"
     pretrained: bool = True
     hf_endpoint: str | None = None
+    img_size: int | None = None
 
 
 class BackboneAdapter(nn.Module):
@@ -74,7 +75,10 @@ def create_backbone(config: BackboneConfig) -> BackboneAdapter:
         import timm
         from timm.data import resolve_model_data_config
 
-        backbone = timm.create_model(config.name, pretrained=config.pretrained, num_classes=0)
+        create_kwargs: dict[str, Any] = {"pretrained": config.pretrained, "num_classes": 0}
+        if config.img_size is not None:
+            create_kwargs["img_size"] = int(config.img_size)
+        backbone = timm.create_model(config.name, **create_kwargs)
         raw_data_config = resolve_model_data_config(backbone)
         data_config = {
             "mean": tuple(raw_data_config.get("mean", (0.485, 0.456, 0.406))),

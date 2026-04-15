@@ -24,6 +24,7 @@ def _build_model_from_config(config: dict[str, Any], device: torch.device) -> Du
             backbone_source=config["model"].get("backbone_source", "torchhub"),
             backbone_repo=config["model"].get("backbone_repo", "facebookresearch/dinov3"),
             pretrained=False,
+            image_size=int(config["data"].get("image_size")) if config["data"].get("image_size") else None,
             fusion_dim=int(config["model"].get("fusion_dim", 1024)),
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
             num_attention_heads=int(config["model"].get("num_attention_heads", 8)),

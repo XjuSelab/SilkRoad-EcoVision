@@ -30,6 +30,7 @@ class ModelConfig:
     backbone_source: str
     backbone_repo: str
     pretrained: bool
+    image_size: int | None
     fusion_dim: int
     trunk_dim: int
     num_attention_heads: int
@@ -47,6 +48,7 @@ class DualStreamBiomassModel(nn.Module):
                 repo=config.backbone_repo,
                 pretrained=config.pretrained,
                 hf_endpoint=config.hf_endpoint,
+                img_size=config.image_size,
             )
         )
         self.stream_projection = nn.Linear(self.backbone.feature_dim, config.fusion_dim)
