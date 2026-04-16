@@ -34,6 +34,12 @@ def generate_pseudo_labels(member_checkpoints: list[str], weights: list[float], 
     for frame in weighted_frames[1:]:
         pseudo[TARGET_COLUMNS] = pseudo[TARGET_COLUMNS].add(frame[TARGET_COLUMNS], fill_value=0.0)
     pseudo[TARGET_COLUMNS] = pseudo[TARGET_COLUMNS] / total_weight
+    pseudo = test_wide.drop(columns=TARGET_COLUMNS, errors="ignore").merge(
+        pseudo,
+        on="image_id",
+        how="inner",
+    )
+    pseudo["cv_group"] = "pseudo"
     pseudo["is_pseudo"] = True
     return pseudo
 
