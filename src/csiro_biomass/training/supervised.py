@@ -12,7 +12,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from csiro_biomass.data.dataset import CSIROBiomassDataset, DatasetConfig
+from csiro_biomass.data.dataset import CSIROBiomassDataset, DatasetConfig, validate_frame_image_paths
 from csiro_biomass.models.dual_stream import DualStreamBiomassModel, ModelConfig
 from csiro_biomass.training.engine import (
     build_optimizer,
@@ -147,6 +147,8 @@ def run_training_job(config: dict[str, Any]) -> Path:
     valid_fold = int(config["train"]["valid_fold"])
     train_frame = frame[frame["fold"] != valid_fold].reset_index(drop=True)
     valid_frame = frame[frame["fold"] == valid_fold].reset_index(drop=True)
+    validate_frame_image_paths(train_frame, config["data"]["image_root"], frame_name="train_frame")
+    validate_frame_image_paths(valid_frame, config["data"]["image_root"], frame_name="valid_frame")
 
     model = _build_model(config, device)
     data_defaults = _resolve_data_config(config, model)

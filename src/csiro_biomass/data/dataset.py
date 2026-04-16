@@ -51,6 +51,52 @@ def _resolve_interpolation(name: str) -> int:
     return INTERPOLATION_MAP.get(name.lower(), cv2.INTER_CUBIC)
 
 
+def _is_missing_image_path(value: Any) -> bool:
+    if pd.isna(value):
+        return True
+    text = str(value).strip()
+    return text == "" or text.lower() in {"nan", "none"}
+
+
+def _format_bad_path_rows(
+    frame: pd.DataFrame,
+    *,
+    indices: pd.Index,
+    image_root: Path,
+    max_examples: int = 5,
+) -> str:
+    examples = []
+    for _, row in frame.loc[indices, ["image_id", "image_path"]].head(max_examples).iterrows():
+        examples.append(
+            f"image_id={row['image_id']}, image_path={row['image_path']}, "
+            f"resolved={image_root / str(row['image_path'])}"
+        )
+    return "; ".join(examples)
+
+
+def validate_frame_image_paths(frame: pd.DataFrame, image_root: str | Path, *, frame_name: str) -> None:
+    image_root = Path(image_root)
+    if "image_path" not in frame.columns:
+        raise ValueError(f"{frame_name} is missing required column 'image_path'")
+
+    missing_mask = frame["image_path"].map(_is_missing_image_path)
+    if bool(missing_mask.any()):
+        bad_indices = frame.index[missing_mask]
+        raise ValueError(
+            f"{frame_name} contains {int(missing_mask.sum())} rows with missing image_path. "
+            f"Examples: {_format_bad_path_rows(frame, indices=bad_indices, image_root=image_root)}"
+        )
+
+    resolved_paths = frame["image_path"].map(lambda value: image_root / str(value))
+    exists_mask = resolved_paths.map(Path.exists)
+    if not bool(exists_mask.all()):
+        bad_indices = frame.index[~exists_mask]
+        raise FileNotFoundError(
+            f"{frame_name} contains {int((~exists_mask).sum())} rows whose image files do not exist. "
+            f"Examples: {_format_bad_path_rows(frame, indices=bad_indices, image_root=image_root)}"
+        )
+
+
 def build_train_transforms(
     image_size: int,
     *,
@@ -136,7 +182,19 @@ class CSIROBiomassDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         row = self.frame.iloc[index]
-        image_path = self.image_root / str(row["image_path"])
+        raw_image_path = row["image_path"]
+        if _is_missing_image_path(raw_image_path):
+            raise FileNotFoundError(
+                f"Missing image_path for image_id={row['image_id']} at dataset index={index}. "
+                f"Raw image_path value={raw_image_path!r}"
+            )
+
+        image_path = self.image_root / str(raw_image_path)
+        if not image_path.exists():
+            raise FileNotFoundError(
+                f"Image file not found for image_id={row['image_id']} at dataset index={index}. "
+                f"image_path={raw_image_path!r}, resolved_path={image_path}"
+            )
         image = np.array(Image.open(image_path).convert("RGB"))
         left_image, right_image = split_left_right(image)
 

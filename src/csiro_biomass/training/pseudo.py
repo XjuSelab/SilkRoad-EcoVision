@@ -9,15 +9,29 @@ from pathlib import Path
 import pandas as pd
 
 from csiro_biomass.data.constants import TARGET_COLUMNS
+from csiro_biomass.data.dataset import validate_frame_image_paths
 from csiro_biomass.inference.predict import build_prediction_dataloader, load_model_from_checkpoint, predict_with_model
 from csiro_biomass.training.supervised import run_training
 from csiro_biomass.utils.config import ensure_dir, load_yaml_config
+
+
+def _validate_pseudo_frame(pseudo_frame: pd.DataFrame, image_root: str | Path, *, frame_name: str) -> None:
+    if pseudo_frame["image_id"].duplicated().any():
+        duplicated_ids = pseudo_frame.loc[pseudo_frame["image_id"].duplicated(), "image_id"].head(5).tolist()
+        raise ValueError(f"{frame_name} contains duplicate image_id values: {duplicated_ids}")
+
+    missing_targets = [target for target in TARGET_COLUMNS if target not in pseudo_frame.columns]
+    if missing_targets:
+        raise ValueError(f"{frame_name} is missing target columns: {missing_targets}")
+
+    validate_frame_image_paths(pseudo_frame, image_root, frame_name=frame_name)
 
 
 def generate_pseudo_labels(member_checkpoints: list[str], weights: list[float], config: dict) -> pd.DataFrame:
     import torch
 
     test_wide = pd.read_parquet(config["data"]["test_manifest"])
+    validate_frame_image_paths(test_wide, config["data"]["image_root"], frame_name="test_wide_for_pseudo")
     dataloader = build_prediction_dataloader(test_wide, config)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -41,12 +55,22 @@ def generate_pseudo_labels(member_checkpoints: list[str], weights: list[float], 
     )
     pseudo["cv_group"] = "pseudo"
     pseudo["is_pseudo"] = True
+    _validate_pseudo_frame(pseudo, config["data"]["image_root"], frame_name="pseudo_frame")
     return pseudo
 
 
-def merge_train_and_pseudo(train_manifest: str | Path, pseudo_frame: pd.DataFrame, output_path: str | Path) -> str:
+def merge_train_and_pseudo(
+    train_manifest: str | Path,
+    pseudo_frame: pd.DataFrame,
+    output_path: str | Path,
+    *,
+    image_root: str | Path,
+) -> str:
     train_wide = pd.read_parquet(train_manifest)
+    validate_frame_image_paths(train_wide, image_root, frame_name="train_wide")
+    _validate_pseudo_frame(pseudo_frame, image_root, frame_name="pseudo_frame")
     combined = pd.concat([train_wide, pseudo_frame], axis=0, ignore_index=True, sort=False)
+    validate_frame_image_paths(combined, image_root, frame_name="combined_train_plus_pseudo")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(output_path, index=False)
@@ -67,6 +91,7 @@ def run_pseudo_training(config: dict) -> None:
             config["data"]["train_manifest"],
             pseudo_frame,
             pseudo_dir / f"train_plus_pseudo_round{round_index}.parquet",
+            image_root=config["data"]["image_root"],
         )
 
         produced_checkpoints = []
