@@ -30,6 +30,8 @@ class ModelConfig:
     backbone_source: str
     backbone_repo: str
     pretrained: bool
+    backbone_weights: str | None
+    backbone_check_hash: bool
     image_size: int | None
     fusion_dim: int
     trunk_dim: int
@@ -47,6 +49,8 @@ class DualStreamBiomassModel(nn.Module):
                 source=config.backbone_source,
                 repo=config.backbone_repo,
                 pretrained=config.pretrained,
+                weights=config.backbone_weights,
+                check_hash=config.backbone_check_hash,
                 hf_endpoint=config.hf_endpoint,
                 img_size=config.image_size,
             )

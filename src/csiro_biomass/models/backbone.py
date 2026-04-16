@@ -16,6 +16,8 @@ class BackboneConfig:
     source: str = "torchhub"
     repo: str = "facebookresearch/dinov3"
     pretrained: bool = True
+    weights: str | None = None
+    check_hash: bool = False
     hf_endpoint: str | None = None
     img_size: int | None = None
 
@@ -65,7 +67,11 @@ def create_backbone(config: BackboneConfig) -> BackboneAdapter:
 
     source = config.source.lower()
     if source == "torchhub":
-        backbone = torch.hub.load(config.repo, config.name, pretrained=config.pretrained)
+        hub_kwargs: dict[str, Any] = {"pretrained": config.pretrained}
+        if config.weights:
+            hub_kwargs["weights"] = config.weights
+            hub_kwargs["check_hash"] = config.check_hash
+        backbone = torch.hub.load(config.repo, config.name, **hub_kwargs)
         data_config = {
             "mean": (0.485, 0.456, 0.406),
             "std": (0.229, 0.224, 0.225),

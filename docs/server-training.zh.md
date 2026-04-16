@@ -9,12 +9,34 @@ uv sync --dev
 uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 ```
 
-当前第一步不是继续扫新 backbone，而是直接基于 H200 本地已经齐备的 `5` 组结果做 OOF 分析闭环。
+如果要跑 `torchhub` 版 `DINOv3 ViT-L/16`，先手动把官方 `.pth` 权重下载到这个本地目录：
+
+```text
+artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+```
+
+推荐直接用魔塔下载到该目录：
+
+```bash
+mkdir -p artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
+modelscope download \
+  --model facebook/dinov3-vitl16-pretrain-lvd1689m \
+  --local_dir artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
+```
+
+注意：
+
+- 当前仓库的 `torchhub` 加载走的是官方 `dinov3_vitl16(weights=...)` 接口。
+- 本地权重文件名必须保留官方 hash 后缀，也就是 `dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth`，否则官方代码会因为文件名不符合预期而报错。
+- `configs/server/supervised-dinov3-vitl-896.yaml` 和 `configs/server/supervised-dinov3-vitl-1024.yaml` 已默认指向这个本地路径。
+
+当前第一步不是继续扫新 backbone，而是直接基于 H200 本地已经齐备的 `6` 组结果做 OOF 分析闭环。
 
 先对 H200 本地主候选做 teacher 选择：
 
 ```bash
 uv run csiro-biomass oof select \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
@@ -30,6 +52,7 @@ uv run csiro-biomass oof select \
 ```bash
 uv run python scripts/analyze_oof_ensemble.py \
   --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
@@ -203,7 +226,7 @@ uv run python scripts/analyze_oof_ensemble.py \
 
 进入 pseudo / online 的前置条件固定为：
 
-1. H200 本地最优 ensemble 稳定高于当前 H200 本地最强单模 `dinov3-vitl-1024-timm = 0.4914`
+1. H200 本地最优 ensemble 稳定高于当前 H200 本地最强单模 `dinov3-vitl-896-timm = 0.4933`
 2. 或者总分提升有限，但 `Dry_Dead_g / Dry_Clover_g` 的负贡献明显收敛
 3. `postprocess` 的增益不是只出现在单个偶然组合上
 

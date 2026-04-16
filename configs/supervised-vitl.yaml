@@ -10,6 +10,8 @@ model:
   backbone_source: torchhub
   backbone_repo: facebookresearch/dinov3
   pretrained: true
+  backbone_weights: artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+  backbone_check_hash: false
   fusion_dim: 1024
   trunk_dim: 1024
   num_attention_heads: 8
