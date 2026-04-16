@@ -9,35 +9,18 @@ uv sync --dev
 uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 ```
 
-当前第一步不是继续扫新 backbone，而是补齐缺失的强候选并做 OOF 分析闭环。
+当前第一步不是继续扫新 backbone，而是直接基于 H200 本地已经齐备的 `5` 组结果做 OOF 分析闭环。
 
-先在 H200 上补 `dinov2-vitg-518`：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 HF_ENDPOINT=https://hf-mirror.com \
-uv run csiro-biomass train-supervised \
-  --config configs/server/supervised-dinov2-vitg-518.yaml \
-  > logs.dinov2-vitg-518.txt 2>&1 &
-```
-
-跑完后先聚合 `OOF`：
-
-```bash
-uv run csiro-biomass oof aggregate \
-  --experiment-root artifacts/server/dinov2-vitg-518 \
-  --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet
-```
-
-然后对当前主候选做 teacher 选择：
+先对 H200 本地主候选做 teacher 选择：
 
 ```bash
 uv run csiro-biomass oof select \
-  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
+  --experiment-root artifacts/server/dinov2-vitg-reg4-518 \
   --experiment-root artifacts/server/dinov2-vitg-518 \
-  --output-dir artifacts/server/teacher-selection-mainline \
+  --output-dir artifacts/server/teacher-selection-h200 \
   --top-k 4 \
   --correlation-threshold 0.985
 ```
@@ -47,15 +30,15 @@ uv run csiro-biomass oof select \
 ```bash
 uv run python scripts/analyze_oof_ensemble.py \
   --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet \
-  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
+  --experiment-root artifacts/server/dinov2-vitg-reg4-518 \
   --experiment-root artifacts/server/dinov2-vitg-518 \
-  --output-dir artifacts/server/ensemble-analysis-mainline \
+  --output-dir artifacts/server/ensemble-analysis-h200 \
   --min-combination-size 1 \
   --max-combination-size 4 \
-  --top-n 15
+  --top-n 20
 ```
 
 ## 当前主线目标
@@ -220,7 +203,7 @@ uv run python scripts/analyze_oof_ensemble.py \
 
 进入 pseudo / online 的前置条件固定为：
 
-1. 最优 ensemble 稳定高于当前最强单模 `dinov3-vitl-896-timm = 0.5031`
+1. H200 本地最优 ensemble 稳定高于当前 H200 本地最强单模 `dinov3-vitl-1024-timm = 0.4914`
 2. 或者总分提升有限，但 `Dry_Dead_g / Dry_Clover_g` 的负贡献明显收敛
 3. `postprocess` 的增益不是只出现在单个偶然组合上
 
@@ -391,8 +374,8 @@ watch -n 1 nvidia-smi
 
 当前顺序已经不是继续铺新训练矩阵，而是先完成现有强候选的闭环：
 
-1. 补跑并聚合 `supervised-dinov2-vitg-518.yaml`
-2. 统一收集 `5` 个强候选的 `oof_*`
+1. 统一确认 H200 本地 `5` 个强候选的 `oof_*`
+2. 锁定当前 H200 本地分析池
 3. 跑 `oof select`
 4. 跑 `scripts/analyze_oof_ensemble.py`
 5. 再决定是否进入 `train-pseudo`
