@@ -68,7 +68,7 @@ def run_pseudo_training(config: dict) -> None:
             child_config = copy.deepcopy(config["pseudo"]["student_template"])
             child_config["data"]["train_manifest"] = combined_manifest
             child_config["model"]["backbone_name"] = round_config["student_backbone_name"]
-            child_config["model"]["backbone_source"] = round_config.get("student_backbone_source", "torchhub")
+            child_config["model"]["backbone_source"] = round_config.get("student_backbone_source", "timm")
             child_config["train"]["output_dir"] = str(
                 pseudo_dir / f"round{round_index}" / f"student_{model_index + 1}"
             )

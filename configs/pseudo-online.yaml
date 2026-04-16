@@ -22,10 +22,10 @@ pseudo:
       train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
       fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
     model:
-      backbone_name: dinov3_vitl16
-      backbone_source: torchhub
-      backbone_repo: facebookresearch/dinov3
+      backbone_name: vit_large_patch16_dinov3
+      backbone_source: timm
       pretrained: true
+      hf_endpoint: https://hf-mirror.com
       fusion_dim: 1024
       trunk_dim: 1024
       num_attention_heads: 8
@@ -49,11 +49,11 @@ pseudo:
             epochs: 4
             warmup_steps: 10
   rounds:
-    - student_backbone_name: dinov3_vitl16
-      student_backbone_source: torchhub
+    - student_backbone_name: vit_large_patch16_dinov3
+      student_backbone_source: timm
       num_models: 2
       teacher_weights: [1.0, 1.0, 1.0, 1.0]
-    - student_backbone_name: dinov3_vitb16
-      student_backbone_source: torchhub
+    - student_backbone_name: vit_base_patch16_dinov3
+      student_backbone_source: timm
       num_models: 2
       teacher_weights: [1.0, 1.0]

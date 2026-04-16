@@ -1,0 +1,36 @@
+data:
+  image_root: data/raw/csiro-biomass
+  image_size: 896
+  black_padding_probability: 0.2
+  train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
+  fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+
+model:
+  backbone_name: facebook/dinov3-vitl16-pretrain-lvd1689m
+  backbone_source: transformers
+  backbone_path: artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
+  backbone_local_files_only: true
+  pretrained: true
+  fusion_dim: 1024
+  trunk_dim: 1024
+  num_attention_heads: 8
+  dropout: 0.1
+
+train:
+  experiment_name: dinov3-vitl-896-modelscope
+  output_dir: artifacts/server/dinov3-vitl-896-modelscope
+  folds: [0, 1, 2]
+  seeds: [42, 3407]
+  batch_size: 4
+  grad_accum_steps: 4
+  num_workers: 8
+  amp: true
+  cls_weight: 0.3
+  stages:
+    - freeze_backbone: true
+      optimizer: {name: adamw, lr: 2.0e-4, weight_decay: 1.0e-4}
+      scheduler: {name: cosine, epochs: 5, warmup_steps: 20}
+    - freeze_backbone: false
+      unfreeze_last_n_blocks: 0
+      optimizer: {name: adamw, lr: 3.0e-5, weight_decay: 1.0e-4}
+      scheduler: {name: cosine, epochs: 12, warmup_steps: 30}

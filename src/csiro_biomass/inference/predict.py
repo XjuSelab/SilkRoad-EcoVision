@@ -26,6 +26,8 @@ def _build_model_from_config(config: dict[str, Any], device: torch.device) -> Du
             pretrained=False,
             backbone_weights=config["model"].get("backbone_weights"),
             backbone_check_hash=bool(config["model"].get("backbone_check_hash", False)),
+            backbone_path=config["model"].get("backbone_path"),
+            backbone_local_files_only=bool(config["model"].get("backbone_local_files_only", True)),
             image_size=int(config["data"].get("image_size")) if config["data"].get("image_size") else None,
             fusion_dim=int(config["model"].get("fusion_dim", 1024)),
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
@@ -59,6 +61,13 @@ def load_model_from_checkpoint_member(member: dict[str, Any], device: torch.devi
         else payloads[0]["state_dict"]
     )
     model.load_state_dict(state_dict, strict=True)
+    return model
+
+
+def load_model_from_checkpoint(checkpoint_path: str | Path, device: torch.device) -> DualStreamBiomassModel:
+    payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model = _build_model_from_config(payload["config"], device)
+    model.load_state_dict(payload["state_dict"], strict=True)
     return model
 
 
