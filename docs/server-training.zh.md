@@ -9,39 +9,53 @@ uv sync --dev
 uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 ```
 
-直接启动一个服务器实验：
+当前第一步不是继续扫新 backbone，而是补齐缺失的强候选并做 OOF 分析闭环。
+
+先在 H200 上补 `dinov2-vitg-518`：
 
 ```bash
-uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896.yaml
+CUDA_VISIBLE_DEVICES=0 HF_ENDPOINT=https://hf-mirror.com \
+uv run csiro-biomass train-supervised \
+  --config configs/server/supervised-dinov2-vitg-518.yaml \
+  > logs.dinov2-vitg-518.txt 2>&1 &
 ```
 
-跑完一个实验根目录后，聚合 `OOF`：
+跑完后先聚合 `OOF`：
 
 ```bash
 uv run csiro-biomass oof aggregate \
-  --experiment-root artifacts/server/dinov3-vitl-896 \
+  --experiment-root artifacts/server/dinov2-vitg-518 \
   --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet
 ```
 
-多个实验跑完后，做 teacher 选择：
+然后对当前主候选做 teacher 选择：
 
 ```bash
 uv run csiro-biomass oof select \
-  --experiment-root artifacts/server/dinov3-vitl-896 \
-  --experiment-root artifacts/server/dinov3-vitl-1024 \
-  --experiment-root artifacts/server/dinov2-vitl-518 \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
+  --experiment-root artifacts/server/dinov3-vitl-1024-timm \
+  --experiment-root artifacts/server/dinov3-vithplus-896-timm \
+  --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
   --experiment-root artifacts/server/dinov2-vitg-518 \
-  --experiment-root artifacts/server/siglip-so400m-384 \
-  --experiment-root artifacts/server/siglip-so400m-448 \
-  --output-dir artifacts/server/teacher-selection \
+  --output-dir artifacts/server/teacher-selection-mainline \
   --top-k 4 \
   --correlation-threshold 0.985
 ```
 
-如果要做带 `TTA` 和 checkpoint averaging 的推理：
+再跑 OOF ensemble + postprocess 分析：
 
 ```bash
-uv run csiro-biomass infer --config configs/infer-ensemble.yaml
+uv run python scripts/analyze_oof_ensemble.py \
+  --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
+  --experiment-root artifacts/server/dinov3-vitl-1024-timm \
+  --experiment-root artifacts/server/dinov3-vithplus-896-timm \
+  --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
+  --experiment-root artifacts/server/dinov2-vitg-518 \
+  --output-dir artifacts/server/ensemble-analysis-mainline \
+  --min-combination-size 1 \
+  --max-combination-size 4 \
+  --top-n 15
 ```
 
 ## 当前主线目标
@@ -50,10 +64,11 @@ uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 
 所以顺序应该是：
 
-1. 跑强 backbone 和不同输入尺寸的服务器实验。
-2. 做完整 `OOF` 聚合。
-3. 筛出最强 single model 和最优 ensemble。
-4. 最后再考虑蒸馏或边缘部署。
+1. 补齐当前强候选的 `oof_*` 证据。
+2. 做 `teacher selection`。
+3. 做 OOF 上的 `ensemble + postprocess` 联合分析。
+4. 锁定 `4` 个 teacher。
+5. 只有在前面确认有稳定正增益时，才进入 pseudo / online。
 
 这和当前仓库策略一致：
 
@@ -64,10 +79,12 @@ uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 
 仓库内已经提供这些服务器配置：
 
-- `configs/server/supervised-dinov3-vitl-896.yaml`
-- `configs/server/supervised-dinov3-vitl-1024.yaml`
-- `configs/server/supervised-dinov2-vitl-518.yaml`
+- `configs/server/supervised-dinov3-vitl-896-timm.yaml`
+- `configs/server/supervised-dinov3-vitl-1024-timm.yaml`
+- `configs/server/supervised-dinov3-vithplus-896-timm.yaml`
+- `configs/server/supervised-dinov2-vitl-reg4-518.yaml`
 - `configs/server/supervised-dinov2-vitg-518.yaml`
+- `configs/server/supervised-dinov2-vitg-reg4-518.yaml`
 - `configs/server/supervised-siglip-so400m-384.yaml`
 - `configs/server/supervised-siglip-so400m-448.yaml`
 
@@ -164,6 +181,50 @@ uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 - 做后续 ensemble
 
 当前仓库里，`oof aggregate` 就是在做这件事。
+
+## 如何做 OOF ensemble + postprocess 分析
+
+当前仓库没有现成的 OOF ensemble CLI，所以补了一份独立脚本：
+
+- `scripts/analyze_oof_ensemble.py`
+
+它固定完成三件事：
+
+1. 对多个实验的 `oof_predictions.parquet` 做等权组合
+2. 同时评估 `raw` 和 `postprocess` 两套结果
+3. 输出组合总分和 per-target 指标，重点看 `Dry_Dead_g / Dry_Clover_g`
+
+主要输入参数：
+
+- `--train-manifest`
+- 多个 `--experiment-root`
+- `--output-dir`
+- `--min-combination-size`
+- `--max-combination-size`
+
+固定输出文件：
+
+- `combination_scores.csv`
+- `combination_metrics.csv`
+- `best_by_size.csv`
+
+其中：
+
+- `combination_scores.csv` 用来看哪个组合总分最高，以及 `postprocess` 是否稳定加分
+- `combination_metrics.csv` 用来看 `Dry_Dead_g / Dry_Clover_g` 是否真的改善
+- `best_by_size.csv` 用来快速看 `1/2/3/4` 个成员时各自最优组合
+
+## 什么时候进入 pseudo / online
+
+不要在 teacher pool 还没锁定前就启动 pseudo。
+
+进入 pseudo / online 的前置条件固定为：
+
+1. 最优 ensemble 稳定高于当前最强单模 `dinov3-vitl-896-timm = 0.5031`
+2. 或者总分提升有限，但 `Dry_Dead_g / Dry_Clover_g` 的负贡献明显收敛
+3. `postprocess` 的增益不是只出现在单个偶然组合上
+
+如果 ensemble 和 postprocess 都没有明显收益，就先停在分析阶段，不扩 pseudo 链路。
 
 ## 为什么要做 TTA 和 checkpoint averaging
 
@@ -328,19 +389,19 @@ watch -n 1 nvidia-smi
 
 ## 推荐的服务器使用顺序
 
-建议按风险和收益这样排：
+当前顺序已经不是继续铺新训练矩阵，而是先完成现有强候选的闭环：
 
-1. 先跑 `supervised-dinov3-vitl-896.yaml`
-2. 再跑 `supervised-dinov3-vitl-1024.yaml`
-3. 再跑 `supervised-dinov2-vitl-518.yaml`
-4. 再补 `supervised-dinov2-vitg-518.yaml`
-5. 最后用 `siglip` 两档分辨率补多样性
+1. 补跑并聚合 `supervised-dinov2-vitg-518.yaml`
+2. 统一收集 `5` 个强候选的 `oof_*`
+3. 跑 `oof select`
+4. 跑 `scripts/analyze_oof_ensemble.py`
+5. 再决定是否进入 `train-pseudo`
 
 原因是：
 
-- `dinov3-vitl-896` 通常是最稳的第一站
-- `1024` 更接近冠军题解主力尺寸
-- `dinov2` 和 `siglip` 更重要的价值是给 ensemble 带来异构性
+- 当前最强单模已经明确，不缺一个新的 backbone 结论
+- 主差距更像在 `teacher selection + ensemble + postprocess + pseudo`
+- `siglip` 当前不再值得继续占主线预算
 
 ## 结果目录长什么样
 
@@ -409,10 +470,10 @@ infer:
 
 当前服务器文线的核心逻辑是：
 
-1. 用大 backbone 和高分辨率做强监督训练。
-2. 用 `fold x seed` 压低运气因素。
-3. 用 `OOF` 做公平比较和筛选。
-4. 用 `TTA + checkpoint averaging + ensemble` 做最终提升。
+1. 先把当前最强候选的 `OOF` 证据补齐。
+2. 用 `teacher selection` 和 OOF 组合分析筛 teacher pool。
+3. 用 `postprocess` 去验证短板 target 是否能被修正。
+4. 只有在分析链路确认有正增益时，再进入 pseudo / online。
 
 当前阶段最重要的不是蒸馏，而是把 teacher 练强。  
 只有在最优 server-side teacher 稳定之后，边缘 student 或 Hailo-8 路线才有意义。
