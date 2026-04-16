@@ -114,6 +114,11 @@ def predict_with_model(
 
 def build_prediction_dataloader(frame: pd.DataFrame, config: dict) -> DataLoader:
     data_settings = config["data"]
+    infer_settings = (
+        config.get("infer")
+        or config.get("train")
+        or config.get("pseudo", {}).get("student_template", {}).get("train", {})
+    )
     mean = tuple(data_settings.get("mean", (0.485, 0.456, 0.406)))
     std = tuple(data_settings.get("std", (0.229, 0.224, 0.225)))
     interpolation = data_settings.get("interpolation", "bicubic")
@@ -130,9 +135,9 @@ def build_prediction_dataloader(frame: pd.DataFrame, config: dict) -> DataLoader
     )
     return DataLoader(
         dataset,
-        batch_size=int(config["infer"].get("batch_size", 4)),
+        batch_size=int(infer_settings.get("batch_size", 4)),
         shuffle=False,
-        num_workers=int(config["infer"].get("num_workers", 4)),
+        num_workers=int(infer_settings.get("num_workers", 4)),
         pin_memory=True,
     )
 
