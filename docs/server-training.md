@@ -7,7 +7,7 @@ This repository now supports a score-first server workflow for the CSIRO dataset
 Run a full fold/seed sweep for a single experiment root:
 
 ```bash
-uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896.yaml
+bash scripts/train_modelscope_dinov3.sh 896
 ```
 
 Each experiment root writes:
@@ -30,8 +30,8 @@ After multiple experiment roots finish:
 
 ```bash
 uv run csiro-biomass oof select \
-  --experiment-root artifacts/server/dinov3-vitl-896 \
-  --experiment-root artifacts/server/dinov3-vitl-1024 \
+  --experiment-root artifacts/server/dinov3-vitl-896-modelscope \
+  --experiment-root artifacts/server/dinov3-vitl-1024-modelscope \
   --experiment-root artifacts/server/dinov2-vitl-518 \
   --experiment-root artifacts/server/dinov2-vitg-518 \
   --experiment-root artifacts/server/siglip-so400m-384 \
@@ -55,8 +55,8 @@ infer:
   tta_policies: [identity, hflip, vflip, rot90]
   members:
     - checkpoints:
-        - artifacts/server/dinov3-vitl-1024/fold0_seed42/best.pt
-        - artifacts/server/dinov3-vitl-1024/fold0_seed3407/best.pt
+        - artifacts/server/dinov3-vitl-1024-modelscope/fold0_seed42/best.pt
+        - artifacts/server/dinov3-vitl-1024-modelscope/fold0_seed3407/best.pt
       weight: 0.35
 ```
 

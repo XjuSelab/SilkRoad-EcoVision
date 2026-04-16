@@ -49,7 +49,7 @@ uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 3. 监督训练：
 
 ```bash
-uv run csiro-biomass train-supervised --config configs/supervised-vitl.yaml
+bash scripts/train_modelscope_dinov3.sh 896
 ```
 
 4. 伪标签在线训练：
@@ -71,14 +71,14 @@ uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 示例：
 
 ```bash
-uv run csiro-biomass train-supervised --config configs/server/supervised-dinov3-vitl-896.yaml
+bash scripts/train_modelscope_dinov3.sh 896
 ```
 
 聚合 OOF：
 
 ```bash
 uv run csiro-biomass oof aggregate \
-  --experiment-root artifacts/server/dinov3-vitl-896 \
+  --experiment-root artifacts/server/dinov3-vitl-896-modelscope \
   --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet
 ```
 
@@ -86,8 +86,8 @@ uv run csiro-biomass oof aggregate \
 
 ```bash
 uv run csiro-biomass oof select \
-  --experiment-root artifacts/server/dinov3-vitl-896 \
-  --experiment-root artifacts/server/dinov3-vitl-1024 \
+  --experiment-root artifacts/server/dinov3-vitl-896-modelscope \
+  --experiment-root artifacts/server/dinov3-vitl-1024-modelscope \
   --output-dir artifacts/server/teacher-selection
 ```
 

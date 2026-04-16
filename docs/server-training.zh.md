@@ -9,10 +9,10 @@ uv sync --dev
 uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 ```
 
-如果要跑 `torchhub` 版 `DINOv3 ViT-L/16`，先手动把官方 `.pth` 权重下载到这个本地目录：
+如果要跑魔塔社区的 `DINOv3 ViT-L/16` 微调，先把本地 snapshot 下载到这个目录：
 
 ```text
-artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
 ```
 
 推荐直接用魔塔下载到该目录：
@@ -24,11 +24,21 @@ modelscope download \
   --local_dir artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
 ```
 
+下载完后直接用新的训练脚本：
+
+```bash
+bash scripts/train_modelscope_dinov3.sh 896
+bash scripts/train_modelscope_dinov3.sh 1024
+```
+
 注意：
 
-- 当前仓库的 `torchhub` 加载走的是官方 `dinov3_vitl16(weights=...)` 接口。
-- 本地权重文件名必须保留官方 hash 后缀，也就是 `dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth`，否则官方代码会因为文件名不符合预期而报错。
-- `configs/server/supervised-dinov3-vitl-896.yaml` 和 `configs/server/supervised-dinov3-vitl-1024.yaml` 已默认指向这个本地路径。
+- 当前活动 ModelScope 路线走的是 `transformers`，直接读取本地 `model.safetensors` snapshot。
+- 原 `torchhub` 版 DINOv3 配置已经归档到 `configs/archive/torchhub/`，不再作为推荐主线。
+- 训练脚本默认要求 snapshot 目录下存在：
+  - `config.json`
+  - `model.safetensors`
+  - `preprocessor_config.json`
 
 当前第一步不是继续扫新 backbone，而是直接基于 H200 本地已经齐备的 `6` 组结果做 OOF 分析闭环。
 
@@ -85,6 +95,8 @@ uv run python scripts/analyze_oof_ensemble.py \
 
 仓库内已经提供这些服务器配置：
 
+- `configs/server/supervised-dinov3-vitl-896-modelscope.yaml`
+- `configs/server/supervised-dinov3-vitl-1024-modelscope.yaml`
 - `configs/server/supervised-dinov3-vitl-896-timm.yaml`
 - `configs/server/supervised-dinov3-vitl-1024-timm.yaml`
 - `configs/server/supervised-dinov3-vithplus-896-timm.yaml`
@@ -95,6 +107,12 @@ uv run python scripts/analyze_oof_ensemble.py \
 - `configs/server/supervised-siglip-so400m-448.yaml`
 
 它们的意义不是一次只跑一个模型，而是把 `8xH200` 当作实验池，快速并行筛 backbone、分辨率、`fold` 和 `seed`。
+
+归档配置位于：
+
+- `configs/archive/torchhub/supervised-dinov3-vitl-896.yaml`
+- `configs/archive/torchhub/supervised-dinov3-vitl-1024.yaml`
+- `configs/archive/torchhub/supervised-vitl.yaml`
 
 ## 一次训练到底在做什么
 

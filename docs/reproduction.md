@@ -27,7 +27,8 @@ data/processed/csiro-biomass/folds/folds_v1.parquet
 ## Modeling Choices
 
 - Input image is split into two `1000x1000` views by width.
-- Backbone defaults to DINOv3 through `torch.hub`, with `timm` fallback available in code.
+- Active DINOv3 single-model routes are `timm` and local `ModelScope/transformers`.
+- Legacy `torchhub` DINOv3 configs are archived under `configs/archive/torchhub/`.
 - Outputs include five regression heads and five 7-class interval-classification heads.
 - Loss is weighted `SmoothL1 + 0.3 * CrossEntropy`.
 - Post-processing follows the exact rule set quoted in the winning write-up.
