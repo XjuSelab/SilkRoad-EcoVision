@@ -35,6 +35,8 @@ secrets/
 data/raw/
 data/processed/
 artifacts/
+artifacts/server/ensemble-analysis-*/
+artifacts/server/teacher-selection-*/
 outputs/
 logs/
 runs/
