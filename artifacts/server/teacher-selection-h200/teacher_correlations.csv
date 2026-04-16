@@ -1,0 +1,7 @@
+candidate,selected,mean_prediction_corr
+artifacts/server/dinov3-vithplus-896-timm,artifacts/server/dinov3-vitl-1024-timm,0.9735310230753761
+artifacts/server/dinov2-vitl-reg4-518,artifacts/server/dinov3-vitl-1024-timm,0.968710696523296
+artifacts/server/dinov2-vitl-reg4-518,artifacts/server/dinov3-vithplus-896-timm,0.9613022343548738
+artifacts/server/dinov2-vitg-reg4-518,artifacts/server/dinov3-vitl-1024-timm,0.9640505997112511
+artifacts/server/dinov2-vitg-reg4-518,artifacts/server/dinov3-vithplus-896-timm,0.9668856976526612
+artifacts/server/dinov2-vitg-reg4-518,artifacts/server/dinov2-vitl-reg4-518,0.9784962701983041

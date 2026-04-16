@@ -1,0 +1,5 @@
+experiment_root,oof_weighted_r2,avg_corr
+artifacts/server/dinov3-vitl-1024-timm,0.4913738777031448,0.4493905143084353
+artifacts/server/dinov3-vithplus-896-timm,0.487280167399356,0.44434563207048416
+artifacts/server/dinov2-vitl-reg4-518,0.4686587279191118,0.4380920460298353
+artifacts/server/dinov2-vitg-reg4-518,0.46045043135524033,0.43139785545428866
