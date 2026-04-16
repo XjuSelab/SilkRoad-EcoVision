@@ -18,6 +18,8 @@ from csiro_biomass.utils.postprocess import apply_postprocess, clamp_prediction_
 
 
 def _build_model_from_config(config: dict[str, Any], device: torch.device) -> DualStreamBiomassModel:
+    metadata_settings = config["data"].get("metadata", {})
+    metadata_spec = metadata_settings.get("spec") or {}
     model = DualStreamBiomassModel(
         ModelConfig(
             backbone_name=config["model"]["backbone_name"],
@@ -35,6 +37,9 @@ def _build_model_from_config(config: dict[str, Any], device: torch.device) -> Du
             dropout=float(config["model"].get("dropout", 0.1)),
             target_head_mode=config["model"].get("target_head_mode", "five_head"),
             hf_endpoint=config["model"].get("hf_endpoint"),
+            use_metadata=bool(config["model"].get("use_metadata", False)),
+            metadata_feature_dim=int(metadata_spec.get("feature_dim", 0)),
+            metadata_hidden_dim=int(config["model"].get("metadata_hidden_dim", 128)),
         )
     )
     model.to(device)
@@ -72,6 +77,33 @@ def load_model_from_checkpoint(checkpoint_path: str | Path, device: torch.device
     return model
 
 
+def _load_checkpoint_metadata_spec(checkpoint_path: str | Path) -> dict[str, Any] | None:
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    return payload.get("config", {}).get("data", {}).get("metadata", {}).get("spec")
+
+
+def _resolve_prediction_metadata_spec(config: dict[str, Any]) -> dict[str, Any] | None:
+    metadata_spec = config["data"].get("metadata", {}).get("spec")
+    if metadata_spec:
+        return metadata_spec
+
+    if "infer" in config:
+        for member in config["infer"].get("members", []):
+            checkpoint_paths = member.get("checkpoints") or [member["checkpoint"]]
+            for checkpoint_path in checkpoint_paths:
+                metadata_spec = _load_checkpoint_metadata_spec(checkpoint_path)
+                if metadata_spec:
+                    return metadata_spec
+
+    if "pseudo" in config:
+        for checkpoint_path in config["pseudo"].get("initial_teacher_checkpoints", []):
+            metadata_spec = _load_checkpoint_metadata_spec(checkpoint_path)
+            if metadata_spec:
+                return metadata_spec
+
+    return None
+
+
 def _apply_tta(images: torch.Tensor, policy: str) -> torch.Tensor:
     if policy == "identity":
         return images
@@ -100,7 +132,10 @@ def predict_with_model(
             for policy in policies:
                 left_image = _apply_tta(batch["left_image"].to(device, non_blocking=True), policy)
                 right_image = _apply_tta(batch["right_image"].to(device, non_blocking=True), policy)
-                outputs = model(left_image, right_image)
+                metadata_features = batch.get("metadata_features")
+                if metadata_features is not None:
+                    metadata_features = metadata_features.to(device, non_blocking=True)
+                outputs = model(left_image, right_image, metadata_features=metadata_features)
                 if not logged_first_batch:
                     first_output = next(iter(outputs["regression"].values()))
                     print(
@@ -143,6 +178,7 @@ def build_prediction_dataloader(frame: pd.DataFrame, config: dict) -> DataLoader
             mean=mean,
             std=std,
             interpolation=interpolation,
+            metadata_spec=_resolve_prediction_metadata_spec(config),
         ),
     )
     return DataLoader(

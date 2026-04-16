@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+import pandas as pd
+
 from csiro_biomass.data.constants import TARGET_COLUMNS
 
 DEFAULT_THIRD_PLACE_PARAMS: dict[str, Any] = {
@@ -101,3 +103,48 @@ def apply_rule_based_postprocess(row: Mapping[str, float]) -> dict[str, float]:
 
 def clamp_prediction_dict(row: Mapping[str, float]) -> dict[str, float]:
     return {key: max(0.0, float(row[key])) for key in TARGET_COLUMNS}
+
+
+def _safe_median_ratio(true_values: pd.Series, pred_values: pd.Series) -> float:
+    mask = pred_values > 0
+    if not mask.any():
+        return 1.0
+    ratio = (true_values[mask] / pred_values[mask]).replace([float("inf"), float("-inf")], pd.NA).dropna()
+    if ratio.empty:
+        return 1.0
+    return float(ratio.median())
+
+
+def _clip_multiplier(value: float) -> float:
+    return float(min(1.3, max(0.7, value)))
+
+
+def fit_third_place_params(validation_frame: pd.DataFrame) -> dict[str, Any]:
+    clover_pred = validation_frame["Dry_Clover_g_pred"]
+    clover_true = validation_frame["Dry_Clover_g_true"]
+    clover_mask = clover_pred > 0.5
+    if clover_mask.any():
+        clover_multiplier = _clip_multiplier(_safe_median_ratio(clover_true[clover_mask], clover_pred[clover_mask]))
+    else:
+        clover_multiplier = 1.0
+
+    dead_pred = validation_frame["Dry_Dead_g_pred"]
+    dead_true = validation_frame["Dry_Dead_g_true"]
+    dead_thresholds = [10.0, 20.0]
+    dead_masks = [
+        dead_pred < dead_thresholds[0],
+        (dead_pred >= dead_thresholds[0]) & (dead_pred < dead_thresholds[1]),
+        dead_pred >= dead_thresholds[1],
+    ]
+    dead_multipliers = []
+    for mask in dead_masks:
+        if mask.any():
+            dead_multipliers.append(_clip_multiplier(_safe_median_ratio(dead_true[mask], dead_pred[mask])))
+        else:
+            dead_multipliers.append(1.0)
+
+    return {
+        "clover_multiplier": round(clover_multiplier, 6),
+        "dead_thresholds": dead_thresholds,
+        "dead_multipliers": [round(value, 6) for value in dead_multipliers],
+    }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from itertools import combinations
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import yaml
 
 from csiro_biomass.data.constants import TARGET_COLUMNS
 from csiro_biomass.training.metrics import compute_per_target_metrics, compute_weighted_r2_from_frame
-from csiro_biomass.utils.postprocess import apply_postprocess, clamp_prediction_dict
+from csiro_biomass.utils.postprocess import apply_postprocess, clamp_prediction_dict, fit_third_place_params
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--postprocess-params-yaml",
         help="Optional YAML file containing postprocess params, used by third_place_oof_scaled.",
+    )
+    parser.add_argument(
+        "--fit-postprocess-per-combination",
+        action="store_true",
+        help="Fit third_place_oof_scaled params on each raw OOF combination before evaluating postprocess.",
     )
     return parser
 
@@ -133,6 +139,7 @@ def build_score_row(
     raw_metrics: pd.DataFrame,
     post_score: float,
     post_metrics: pd.DataFrame,
+    postprocess_params: dict | None = None,
 ) -> dict[str, float | int | str]:
     row: dict[str, float | int | str] = {
         "combination_size": combination_size,
@@ -146,6 +153,8 @@ def build_score_row(
     for target in TARGET_COLUMNS:
         row[f"raw_{target}_weighted_component"] = float(raw_lookup.loc[target])
         row[f"post_{target}_weighted_component"] = float(post_lookup.loc[target])
+    if postprocess_params is not None:
+        row["postprocess_params"] = json.dumps(postprocess_params, sort_keys=True)
     return row
 
 
@@ -167,6 +176,7 @@ def build_best_by_size(scores: pd.DataFrame) -> pd.DataFrame:
                 "combination": raw_best["combination"],
                 "oof_weighted_r2": float(raw_best["raw_oof_weighted_r2"]),
                 "post_delta": float(raw_best["post_delta"]),
+                "postprocess_params": raw_best.get("postprocess_params"),
             }
         )
         rows.append(
@@ -176,6 +186,7 @@ def build_best_by_size(scores: pd.DataFrame) -> pd.DataFrame:
                 "combination": post_best["combination"],
                 "oof_weighted_r2": float(post_best["post_oof_weighted_r2"]),
                 "post_delta": float(post_best["post_delta"]),
+                "postprocess_params": post_best.get("postprocess_params"),
             }
         )
     return pd.DataFrame(rows)
@@ -213,17 +224,21 @@ def main() -> None:
         for combo_names in combinations(frames.keys(), combination_size):
             combination_name = " + ".join(combo_names)
             averaged_predictions = average_prediction_frames([frames[name] for name in combo_names])
-
-            raw_score, raw_metrics = evaluate_predictions(truth_frame, averaged_predictions)
+            raw_validation = build_validation_frame(truth_frame, averaged_predictions)
+            raw_metrics = compute_per_target_metrics(raw_validation)[["target", "corr", "mae", "rmse", "weighted_component"]]
+            raw_score = float(compute_weighted_r2_from_frame(raw_validation))
             raw_metrics = raw_metrics.copy()
             raw_metrics.insert(0, "mode", "raw")
             raw_metrics.insert(0, "combination_size", combination_size)
             raw_metrics.insert(0, "combination", combination_name)
 
+            fitted_params = postprocess_params
+            if args.fit_postprocess_per_combination and args.postprocess_strategy == "third_place_oof_scaled":
+                fitted_params = fit_third_place_params(raw_validation)
             post_predictions = apply_postprocess_to_predictions(
                 averaged_predictions,
                 strategy=args.postprocess_strategy,
-                params=postprocess_params,
+                params=fitted_params,
             )
             post_score, post_metrics = evaluate_predictions(truth_frame, post_predictions)
             post_metrics = post_metrics.copy()
@@ -239,6 +254,7 @@ def main() -> None:
                     raw_metrics=raw_metrics,
                     post_score=post_score,
                     post_metrics=post_metrics,
+                    postprocess_params=fitted_params,
                 )
             )
             metrics_rows.extend([raw_metrics, post_metrics])

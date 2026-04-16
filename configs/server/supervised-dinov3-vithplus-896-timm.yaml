@@ -4,11 +4,18 @@ data:
   black_padding_probability: 0.2
   train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
   fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+  metadata:
+    enabled: true
+    numeric_columns: [Pre_GSHH_NDVI, Height_Ave_cm]
+    categorical_columns: [State, Species]
+    include_sampling_date_cyclical: true
 
 model:
   backbone_name: vit_huge_plus_patch16_dinov3
   backbone_source: timm
   target_head_mode: three_head_constrained
+  use_metadata: true
+  metadata_hidden_dim: 128
   pretrained: true
   hf_endpoint: https://hf-mirror.com
   fusion_dim: 1280

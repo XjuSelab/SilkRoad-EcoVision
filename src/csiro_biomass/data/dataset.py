@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,12 @@ from albumentations.pytorch import ToTensorV2
 from PIL import Image
 from torch.utils.data import Dataset
 
-from csiro_biomass.data.constants import BORDERS_DICT, TARGET_COLUMNS
+from csiro_biomass.data.constants import (
+    BORDERS_DICT,
+    DEFAULT_METADATA_CATEGORICAL_COLUMNS,
+    DEFAULT_METADATA_NUMERIC_COLUMNS,
+    TARGET_COLUMNS,
+)
 
 
 INTERPOLATION_MAP = {
@@ -97,6 +103,95 @@ def validate_frame_image_paths(frame: pd.DataFrame, image_root: str | Path, *, f
         )
 
 
+def _safe_float(value: Any) -> float:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return 0.0
+    return float(numeric)
+
+
+def _encode_sampling_date_cyclical(value: Any) -> list[float]:
+    if pd.isna(value):
+        return [0.0, 0.0]
+
+    text = str(value).strip()
+    if not text:
+        return [0.0, 0.0]
+
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            angle = 2.0 * np.pi * (parsed.timetuple().tm_yday / 366.0)
+            return [float(np.sin(angle)), float(np.cos(angle))]
+        except ValueError:
+            continue
+    return [0.0, 0.0]
+
+
+def build_metadata_spec(
+    frame: pd.DataFrame,
+    *,
+    numeric_columns: list[str] | None = None,
+    categorical_columns: list[str] | None = None,
+    include_sampling_date_cyclical: bool = True,
+) -> dict[str, Any]:
+    numeric_columns = list(numeric_columns or DEFAULT_METADATA_NUMERIC_COLUMNS)
+    categorical_columns = list(categorical_columns or DEFAULT_METADATA_CATEGORICAL_COLUMNS)
+
+    categorical_vocabs: dict[str, list[str]] = {}
+    feature_dim = len(numeric_columns)
+    if include_sampling_date_cyclical:
+        feature_dim += 2
+
+    for column in categorical_columns:
+        values = (
+            frame[column]
+            .dropna()
+            .map(lambda value: str(value).strip())
+            .loc[lambda series: series != ""]
+            .unique()
+            .tolist()
+        )
+        values = sorted(values)
+        categorical_vocabs[column] = values
+        feature_dim += len(values) + 1
+
+    return {
+        "enabled": True,
+        "numeric_columns": numeric_columns,
+        "categorical_columns": categorical_columns,
+        "categorical_vocabs": categorical_vocabs,
+        "include_sampling_date_cyclical": bool(include_sampling_date_cyclical),
+        "feature_dim": feature_dim,
+    }
+
+
+def encode_metadata_features(row: pd.Series, metadata_spec: dict[str, Any] | None) -> np.ndarray:
+    if not metadata_spec or not metadata_spec.get("enabled", False):
+        return np.zeros(0, dtype=np.float32)
+
+    features: list[float] = []
+    for column in metadata_spec.get("numeric_columns", []):
+        features.append(_safe_float(row.get(column)))
+
+    if metadata_spec.get("include_sampling_date_cyclical", False):
+        features.extend(_encode_sampling_date_cyclical(row.get("Sampling_Date")))
+
+    categorical_vocabs = metadata_spec.get("categorical_vocabs", {})
+    for column in metadata_spec.get("categorical_columns", []):
+        vocab = categorical_vocabs.get(column, [])
+        one_hot = np.zeros(len(vocab) + 1, dtype=np.float32)
+        raw_value = row.get(column)
+        encoded_value = "" if pd.isna(raw_value) else str(raw_value).strip()
+        if encoded_value in vocab:
+            one_hot[vocab.index(encoded_value)] = 1.0
+        else:
+            one_hot[-1] = 1.0
+        features.extend(one_hot.tolist())
+
+    return np.asarray(features, dtype=np.float32)
+
+
 def build_train_transforms(
     image_size: int,
     *,
@@ -154,6 +249,7 @@ class DatasetConfig:
     mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
     std: tuple[float, float, float] = (0.229, 0.224, 0.225)
     interpolation: str = "bicubic"
+    metadata_spec: dict[str, Any] | None = None
 
 
 class CSIROBiomassDataset(Dataset):
@@ -214,6 +310,9 @@ class CSIROBiomassDataset(Dataset):
             "left_image": left_tensor,
             "right_image": right_tensor,
         }
+        if self.config.metadata_spec and self.config.metadata_spec.get("enabled", False):
+            metadata_features = encode_metadata_features(row, self.config.metadata_spec)
+            sample["metadata_features"] = torch.tensor(metadata_features, dtype=torch.float32)
 
         has_targets = all(pd.notna(row[target]) for target in TARGET_COLUMNS)
         if has_targets:

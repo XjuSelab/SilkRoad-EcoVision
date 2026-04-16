@@ -4,11 +4,18 @@ data:
   black_padding_probability: 0.2
   train_manifest: data/processed/csiro-biomass/metadata/train_wide.parquet
   fold_manifest: data/processed/csiro-biomass/folds/folds_v1.parquet
+  metadata:
+    enabled: true
+    numeric_columns: [Pre_GSHH_NDVI, Height_Ave_cm]
+    categorical_columns: [State, Species]
+    include_sampling_date_cyclical: true
 
 model:
   backbone_name: facebook/dinov3-vitl16-pretrain-lvd1689m
   backbone_source: transformers
   target_head_mode: three_head_constrained
+  use_metadata: true
+  metadata_hidden_dim: 128
   backbone_path: artifacts/pretrained/modelscope/facebook/dinov3-vitl16-pretrain-lvd1689m
   backbone_local_files_only: true
   pretrained: true

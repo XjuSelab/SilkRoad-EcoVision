@@ -102,6 +102,9 @@ def _run_epoch(
     for batch_index, batch in enumerate(progress):
         left_image = batch["left_image"].to(device, non_blocking=True)
         right_image = batch["right_image"].to(device, non_blocking=True)
+        metadata_features = batch.get("metadata_features")
+        if metadata_features is not None:
+            metadata_features = metadata_features.to(device, non_blocking=True)
         targets = batch["targets"].to(device, non_blocking=True)
         cls_labels = batch["cls_labels"].to(device, non_blocking=True)
         image_ids = batch["image_id"]
@@ -111,7 +114,7 @@ def _run_epoch(
             enabled=amp_enabled and device.type == "cuda",
             dtype=torch.bfloat16,
         ):
-            outputs = model(left_image, right_image)
+            outputs = model(left_image, right_image, metadata_features=metadata_features)
             loss_output = criterion(outputs, targets, cls_labels)
 
         if not logged_first_batch:

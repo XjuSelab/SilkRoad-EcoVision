@@ -12,7 +12,12 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from csiro_biomass.data.dataset import CSIROBiomassDataset, DatasetConfig, validate_frame_image_paths
+from csiro_biomass.data.dataset import (
+    CSIROBiomassDataset,
+    DatasetConfig,
+    build_metadata_spec,
+    validate_frame_image_paths,
+)
 from csiro_biomass.models.dual_stream import DualStreamBiomassModel, ModelConfig
 from csiro_biomass.training.engine import (
     build_optimizer,
@@ -65,6 +70,7 @@ def _build_dataloader(
             mean=mean,
             std=std,
             interpolation=interpolation,
+            metadata_spec=config["data"].get("metadata", {}).get("spec"),
         ),
     )
     sampler = None
@@ -84,6 +90,8 @@ def _build_dataloader(
 
 
 def _build_model(config: dict[str, Any], device: torch.device) -> DualStreamBiomassModel:
+    metadata_settings = config["data"].get("metadata", {})
+    metadata_spec = metadata_settings.get("spec") or {}
     return DualStreamBiomassModel(
         ModelConfig(
             backbone_name=config["model"]["backbone_name"],
@@ -101,8 +109,27 @@ def _build_model(config: dict[str, Any], device: torch.device) -> DualStreamBiom
             dropout=float(config["model"].get("dropout", 0.1)),
             target_head_mode=config["model"].get("target_head_mode", "five_head"),
             hf_endpoint=config["model"].get("hf_endpoint"),
+            use_metadata=bool(config["model"].get("use_metadata", False)),
+            metadata_feature_dim=int(metadata_spec.get("feature_dim", 0)),
+            metadata_hidden_dim=int(config["model"].get("metadata_hidden_dim", 128)),
         )
     ).to(device)
+
+
+def _resolve_metadata_runtime_config(config: dict[str, Any], frame: pd.DataFrame) -> None:
+    metadata_settings = config["data"].get("metadata")
+    if not metadata_settings or not metadata_settings.get("enabled", False):
+        return
+
+    if metadata_settings.get("spec"):
+        return
+
+    metadata_settings["spec"] = build_metadata_spec(
+        frame,
+        numeric_columns=metadata_settings.get("numeric_columns"),
+        categorical_columns=metadata_settings.get("categorical_columns"),
+        include_sampling_date_cyclical=bool(metadata_settings.get("include_sampling_date_cyclical", True)),
+    )
 
 
 def _single_run_output_dir(config: dict[str, Any]) -> Path:
@@ -141,6 +168,7 @@ def run_training_job(config: dict[str, Any]) -> Path:
     output_dir = _single_run_output_dir(config)
 
     train_wide = pd.read_parquet(config["data"]["train_manifest"])
+    _resolve_metadata_runtime_config(config, train_wide)
     fold_df = pd.read_parquet(config["data"]["fold_manifest"])
     frame = train_wide.merge(fold_df, on="image_id", how="left")
 

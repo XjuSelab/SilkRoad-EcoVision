@@ -40,3 +40,13 @@ METADATA_COLUMNS = [
     "Pre_GSHH_NDVI",
     "Height_Ave_cm",
 ]
+
+DEFAULT_METADATA_NUMERIC_COLUMNS = [
+    "Pre_GSHH_NDVI",
+    "Height_Ave_cm",
+]
+
+DEFAULT_METADATA_CATEGORICAL_COLUMNS = [
+    "State",
+    "Species",
+]

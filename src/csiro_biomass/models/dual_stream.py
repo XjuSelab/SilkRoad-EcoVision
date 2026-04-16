@@ -44,6 +44,9 @@ class ModelConfig:
     dropout: float
     target_head_mode: str = FIVE_HEAD
     hf_endpoint: str | None = None
+    use_metadata: bool = False
+    metadata_feature_dim: int = 0
+    metadata_hidden_dim: int = 128
 
 
 class DualStreamBiomassModel(nn.Module):
@@ -72,8 +75,23 @@ class DualStreamBiomassModel(nn.Module):
             dropout=config.dropout,
             batch_first=True,
         )
+        self.use_metadata = bool(config.use_metadata and config.metadata_feature_dim > 0)
+        self.metadata_feature_dim = int(config.metadata_feature_dim)
+        metadata_projection_dim = 0
+        if self.use_metadata:
+            metadata_projection_dim = int(config.metadata_hidden_dim)
+            self.metadata_encoder = nn.Sequential(
+                nn.Linear(self.metadata_feature_dim, metadata_projection_dim),
+                nn.GELU(),
+                nn.Dropout(config.dropout),
+                nn.Linear(metadata_projection_dim, metadata_projection_dim),
+                nn.GELU(),
+                nn.Dropout(config.dropout),
+            )
+        else:
+            self.metadata_encoder = None
         self.trunk = nn.Sequential(
-            nn.Linear(config.fusion_dim * 2, config.trunk_dim),
+            nn.Linear(config.fusion_dim * 2 + metadata_projection_dim, config.trunk_dim),
             nn.GELU(),
             nn.Dropout(config.dropout),
             nn.Linear(config.trunk_dim, config.trunk_dim),
@@ -151,7 +169,12 @@ class DualStreamBiomassModel(nn.Module):
                 if isinstance(tensor, nn.Parameter):
                     tensor.requires_grad = True
 
-    def forward(self, left_image: torch.Tensor, right_image: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(
+        self,
+        left_image: torch.Tensor,
+        right_image: torch.Tensor,
+        metadata_features: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
         left_features = self.backbone(left_image)
         right_features = self.backbone(right_image)
 
@@ -161,6 +184,16 @@ class DualStreamBiomassModel(nn.Module):
         attended, _ = self.cross_attention(tokens, tokens, tokens, need_weights=False)
         fused = self.stream_norm(tokens + attended)
         combined = fused.reshape(fused.shape[0], -1)
+        if self.metadata_encoder is not None:
+            if metadata_features is None:
+                metadata_features = torch.zeros(
+                    combined.shape[0],
+                    self.metadata_feature_dim,
+                    device=combined.device,
+                    dtype=combined.dtype,
+                )
+            metadata_encoded = self.metadata_encoder(metadata_features.to(dtype=combined.dtype))
+            combined = torch.cat([combined, metadata_encoded], dim=1)
         shared = self.trunk(combined)
 
         regression = self._build_regression_outputs(shared)

@@ -1,4 +1,6 @@
-from csiro_biomass.utils.postprocess import apply_postprocess, apply_rule_based_postprocess
+import pandas as pd
+
+from csiro_biomass.utils.postprocess import apply_postprocess, apply_rule_based_postprocess, fit_third_place_params
 
 
 def test_apply_rule_based_postprocess() -> None:
@@ -36,3 +38,17 @@ def test_apply_third_place_oof_scaled_postprocess() -> None:
     assert processed["Dry_Dead_g"] == 30.0
     assert processed["GDM_g"] == 29.0
     assert processed["Dry_Total_g"] == 59.0
+
+
+def test_fit_third_place_params() -> None:
+    validation = pd.DataFrame(
+        {
+            "Dry_Clover_g_true": [2.0, 9.0, 18.0],
+            "Dry_Clover_g_pred": [1.0, 6.0, 18.0],
+            "Dry_Dead_g_true": [4.0, 18.0, 33.0],
+            "Dry_Dead_g_pred": [5.0, 15.0, 30.0],
+        }
+    )
+    params = fit_third_place_params(validation)
+    assert params["dead_thresholds"] == [10.0, 20.0]
+    assert len(params["dead_multipliers"]) == 3
