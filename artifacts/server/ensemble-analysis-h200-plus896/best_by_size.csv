@@ -1,0 +1,9 @@
+combination_size,mode,combination,oof_weighted_r2,post_delta
+1,raw,dinov3-vitl-896-timm,0.493333939764351,-0.03424839032430821
+1,postprocess,dinov3-vitl-1024-timm,0.4619816020762018,-0.029392275626942965
+2,raw,dinov3-vitl-896-timm + dinov3-vithplus-896-timm,0.4962456222737769,-0.03418391496255635
+2,postprocess,dinov3-vitl-1024-timm + dinov3-vithplus-896-timm,0.4641641212100911,-0.03148998172128192
+3,raw,dinov3-vitl-896-timm + dinov3-vitl-1024-timm + dinov3-vithplus-896-timm,0.49700982087967294,-0.03292193701772772
+3,postprocess,dinov3-vitl-896-timm + dinov3-vitl-1024-timm + dinov3-vithplus-896-timm,0.4640878838619452,-0.03292193701772772
+4,raw,dinov3-vitl-896-timm + dinov3-vitl-1024-timm + dinov3-vithplus-896-timm + dinov2-vitl-reg4-518,0.4952974309805118,-0.033954781716026505
+4,postprocess,dinov3-vitl-896-timm + dinov3-vitl-1024-timm + dinov3-vithplus-896-timm + dinov2-vitl-reg4-518,0.4613426492644853,-0.033954781716026505
