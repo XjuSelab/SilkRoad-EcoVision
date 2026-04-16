@@ -93,14 +93,26 @@ def predict_with_model(
 ) -> pd.DataFrame:
     policies = tta_policies or ["identity"]
     rows: list[dict] = []
+    logged_first_batch = False
     with torch.no_grad():
         for batch in dataloader:
             tta_predictions = []
             for policy in policies:
-                outputs = model(
-                    _apply_tta(batch["left_image"].to(device, non_blocking=True), policy),
-                    _apply_tta(batch["right_image"].to(device, non_blocking=True), policy),
-                )
+                left_image = _apply_tta(batch["left_image"].to(device, non_blocking=True), policy)
+                right_image = _apply_tta(batch["right_image"].to(device, non_blocking=True), policy)
+                outputs = model(left_image, right_image)
+                if not logged_first_batch:
+                    first_output = next(iter(outputs["regression"].values()))
+                    print(
+                        "[pseudo-batch] "
+                        f"device={device} "
+                        f"policy={policy} "
+                        f"left_device={left_image.device} "
+                        f"right_device={right_image.device} "
+                        f"output_device={first_output.device} "
+                        f"batch_size={left_image.shape[0]}"
+                    )
+                    logged_first_batch = True
                 tta_predictions.append(
                     torch.stack([outputs["regression"][target] for target in TARGET_COLUMNS], dim=1).float()
                 )

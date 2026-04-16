@@ -98,6 +98,7 @@ def _run_epoch(
 
     progress = tqdm(dataloader, disable=False)
     optimizer.zero_grad(set_to_none=True) if is_training else None
+    logged_first_batch = False
     for batch_index, batch in enumerate(progress):
         left_image = batch["left_image"].to(device, non_blocking=True)
         right_image = batch["right_image"].to(device, non_blocking=True)
@@ -112,6 +113,19 @@ def _run_epoch(
         ):
             outputs = model(left_image, right_image)
             loss_output = criterion(outputs, targets, cls_labels)
+
+        if not logged_first_batch:
+            print(
+                "[train-batch] "
+                f"is_training={is_training} "
+                f"device={device} "
+                f"left_device={left_image.device} "
+                f"right_device={right_image.device} "
+                f"targets_device={targets.device} "
+                f"amp_enabled={amp_enabled and device.type == 'cuda'} "
+                f"batch_size={left_image.shape[0]}"
+            )
+            logged_first_batch = True
 
         if is_training:
             scaled_loss = loss_output.total / grad_accum_steps

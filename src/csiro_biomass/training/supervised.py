@@ -149,6 +149,21 @@ def run_training_job(config: dict[str, Any]) -> Path:
     valid_frame = frame[frame["fold"] == valid_fold].reset_index(drop=True)
     validate_frame_image_paths(train_frame, config["data"]["image_root"], frame_name="train_frame")
     validate_frame_image_paths(valid_frame, config["data"]["image_root"], frame_name="valid_frame")
+    print(
+        "[train-env] "
+        f"device={device} "
+        f"distributed={distributed.distributed} "
+        f"rank={distributed.rank} "
+        f"local_rank={distributed.local_rank} "
+        f"output_dir={output_dir} "
+        f"backbone={config['model']['backbone_name']} "
+        f"source={config['model'].get('backbone_source', 'torchhub')} "
+        f"batch_size={config['train']['batch_size']} "
+        f"grad_accum_steps={config['train'].get('grad_accum_steps', 1)} "
+        f"amp={bool(config['train'].get('amp', True))} "
+        f"train_samples={len(train_frame)} "
+        f"valid_samples={len(valid_frame)}"
+    )
 
     model = _build_model(config, device)
     data_defaults = _resolve_data_config(config, model)

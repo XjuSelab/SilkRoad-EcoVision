@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +14,29 @@ from csiro_biomass.data.dataset import validate_frame_image_paths
 from csiro_biomass.inference.predict import build_prediction_dataloader, load_model_from_checkpoint, predict_with_model
 from csiro_biomass.training.supervised import run_training
 from csiro_biomass.utils.config import ensure_dir, load_yaml_config
+
+
+def _log_pseudo_environment(config: dict) -> None:
+    import torch
+
+    print(
+        "[pseudo-env] "
+        f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', '<unset>')} "
+        f"cuda_available={torch.cuda.is_available()} "
+        f"device_count={torch.cuda.device_count()} "
+        f"output_dir={config['pseudo']['output_dir']} "
+        f"teachers={len(config['pseudo']['initial_teacher_checkpoints'])} "
+        f"rounds={len(config['pseudo']['rounds'])}"
+    )
+    if torch.cuda.is_available():
+        current_device = torch.cuda.current_device()
+        properties = torch.cuda.get_device_properties(current_device)
+        print(
+            "[pseudo-env] "
+            f"current_device={current_device} "
+            f"device_name={torch.cuda.get_device_name(current_device)} "
+            f"total_memory_gb={properties.total_memory / (1024 ** 3):.2f}"
+        )
 
 
 def _validate_pseudo_frame(pseudo_frame: pd.DataFrame, image_root: str | Path, *, frame_name: str) -> None:
@@ -34,11 +58,25 @@ def generate_pseudo_labels(member_checkpoints: list[str], weights: list[float], 
     validate_frame_image_paths(test_wide, config["data"]["image_root"], frame_name="test_wide_for_pseudo")
     dataloader = build_prediction_dataloader(test_wide, config)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(
+        "[pseudo-teacher] "
+        f"device={device} "
+        f"test_samples={len(test_wide)} "
+        f"batch_size={dataloader.batch_size} "
+        f"num_workers={dataloader.num_workers}"
+    )
 
     weighted_frames = []
     total_weight = 0.0
     for checkpoint_path, weight in zip(member_checkpoints, weights, strict=True):
         model = load_model_from_checkpoint(checkpoint_path, device)
+        model_device = next(model.parameters()).device
+        print(
+            "[pseudo-teacher] "
+            f"checkpoint={checkpoint_path} "
+            f"weight={weight} "
+            f"model_device={model_device}"
+        )
         frame = predict_with_model(model, dataloader, device)
         frame[TARGET_COLUMNS] = frame[TARGET_COLUMNS] * weight
         weighted_frames.append(frame)
@@ -78,6 +116,7 @@ def merge_train_and_pseudo(
 
 
 def run_pseudo_training(config: dict) -> None:
+    _log_pseudo_environment(config)
     pseudo_dir = ensure_dir(config["pseudo"]["output_dir"])
     current_teacher_checkpoints = list(config["pseudo"]["initial_teacher_checkpoints"])
 
