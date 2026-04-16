@@ -38,7 +38,7 @@
 
 | 排名 | 实验 | 平台 | OOF Weighted R2 | num_runs | 结论 |
 | --- | --- | --- | ---: | ---: | --- |
-| `1` | `dinov3-vitl-896-timm` | `L40` | `0.5031` | `6` | 当前最强单模主线 |
+| `1` | `dinov3-vitl-896-timm` | `H200` | `0.4933` | `6` | 当前最强单模主线 |
 | `2` | `dinov3-vitl-1024-timm` | `H200` | `0.4914` | `6` | 更高分辨率未超过 `896-timm` |
 | `3` | `dinov3-vithplus-896-timm` | `H200` | `0.4873` | `6` | 更大模型未超过 `ViT-L 896-timm` |
 | `4` | `dinov2-vitl-reg4-518` | `H200` | `0.4687` | `6` | `reg4` 有改进，但未改主线格局 |
@@ -57,9 +57,9 @@
 
 ### 关键结论
 
-1. `dinov3-vitl-896-timm = 0.5031` 已经明确成为当前最强单模。
-2. 更高分辨率并未自动涨分：`dinov3-vitl-1024-timm = 0.4914 < 0.5031`。
-3. 更大模型并未自动涨分：`dinov3-vithplus-896-timm = 0.4873 < 0.5031`。
+1. `dinov3-vitl-896-timm = 0.4933` 在 H200 上仍然是当前最强单模。
+2. 更高分辨率并未自动涨分：`dinov3-vitl-1024-timm = 0.4914 < 0.4933`。
+3. 更大模型并未自动涨分：`dinov3-vithplus-896-timm = 0.4873 < 0.4933`。
 4. `reg4` 版本有提升，但 `DINOv2-L = 0.4687`、`DINOv2-G = 0.4605` 仍未接近当前 `DINOv3-L 896-timm` 主线。
 5. `siglip` 线已经可以视为主线失败：`384 = 0.0695`，`448 = 0.0356`。
 6. 当前总分上限主要不是被 backbone 卡住，而是被少数短板 target 持续拖住。
@@ -70,7 +70,7 @@
 
 | 实验 | 平台 | `Dry_Green_g` | `Dry_Dead_g` | `Dry_Clover_g` | `GDM_g` | `Dry_Total_g` |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `dinov3-vitl-896-timm` | `L40` | `0.5594` | `-0.0999` | `-0.2215` | `0.6601` | `0.6945` |
+| `dinov3-vitl-896-timm` | `H200` | `0.5387` | `-0.1042` | `-0.2186` | `0.6572` | `0.6806` |
 | `dinov3-vitl-1024-timm` | `H200` | `0.5314` | `-0.1010` | `-0.2214` | `0.6453` | `0.6828` |
 | `dinov3-vithplus-896-timm` | `H200` | `0.5687` | `-0.1289` | `-0.2122` | `0.6671` | `0.6622` |
 | `dinov2-vitl-reg4-518` | `H200` | `0.4866` | `-0.0992` | `-0.2258` | `0.6224` | `0.6560` |
@@ -82,9 +82,9 @@
 固定可以得出这些观察：
 
 - `dinov3-vitl-896-timm` 的领先主要来自：
-  - `Dry_Total_g = 0.6945`
-  - `GDM_g = 0.6601`
-  - `Dry_Green_g = 0.5594`
+  - `Dry_Total_g = 0.6806`
+  - `GDM_g = 0.6572`
+  - `Dry_Green_g = 0.5387`
 - `dinov3-vitl-1024-timm` 没有超过 `896-timm`，原因不是单一 target 崩掉，而是三个主贡献目标都略弱：
   - `Dry_Green_g` 更低
   - `GDM_g` 更低
@@ -105,7 +105,7 @@
 
 - `Dry_Dead_g` 在所有当前有竞争力的 `DINO` 模型里都是负贡献，最好也只到约 `-0.099` 量级。
 - `Dry_Clover_g` 在所有当前有竞争力的 `DINO` 模型里也都是负贡献，没有任何一条主线把它拉回正值。
-- `dinov3-vitl-896-timm` 已经把 `Dry_Total_g / GDM_g / Dry_Green_g` 推得很高，但总分仍停在 `0.5031`，说明真正还没修掉的就是这两个 target 的系统性拖分。
+- `dinov3-vitl-896-timm` 已经把 `Dry_Total_g / GDM_g / Dry_Green_g` 推得很高，但总分仍停在 `0.4933`，说明真正还没修掉的就是这两个 target 的系统性拖分。
 
 ### `siglip` 为什么可以降级
 
@@ -124,12 +124,13 @@
 
 ## 当前下一步执行清单
 
-当前阶段不再优先扩 backbone 搜索，而是先基于 H200 本地已经齐备的 `5` 组结果做 `teacher selection -> ensemble -> postprocess` 闭环。
+当前阶段不再优先扩 backbone 搜索，而是先基于 H200 本地已经齐备的 `6` 组结果做 `teacher selection -> ensemble -> postprocess` 闭环。
 
 ### 候选池
 
-当前 H200 本地分析组固定为这 `5` 个实验：
+当前 H200 本地分析组固定为这 `6` 个实验：
 
+- `dinov3-vitl-896-timm`
 - `dinov3-vitl-1024-timm`
 - `dinov3-vithplus-896-timm`
 - `dinov2-vitl-reg4-518`
@@ -140,13 +141,9 @@
 
 - 当前 H200 本地最强 `DINOv3`
 - 同家族更大模型
+- 同家族更高分辨率
 - `DINOv2-L / G` 两条主补充线
 - `reg4` 与非 `reg4` 的差异
-
-补充说明：
-
-- 全局最强单模仍然是 `dinov3-vitl-896-timm = 0.5031`，但它当前不在这组 H200 本地分析池中。
-- 当前这一步先做 H200 本地闭环；如果后续把 `dinov3-vitl-896-timm` 同步到 H200，再重跑一版扩展分析。
 
 `siglip` 不再进入当前主 teacher pool。
 
@@ -154,6 +151,7 @@
 
 ```bash
 uv run csiro-biomass oof select \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
@@ -180,6 +178,7 @@ uv run csiro-biomass oof select \
 ```bash
 uv run python scripts/analyze_oof_ensemble.py \
   --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet \
+  --experiment-root artifacts/server/dinov3-vitl-896-timm \
   --experiment-root artifacts/server/dinov3-vitl-1024-timm \
   --experiment-root artifacts/server/dinov3-vithplus-896-timm \
   --experiment-root artifacts/server/dinov2-vitl-reg4-518 \
@@ -239,13 +238,13 @@ sed -n '1,20p' artifacts/server/teacher-selection-h200/teacher_selection.csv
 
 进入 pseudo / online 之前，按下面规则判断：
 
-1. H200 本地最优 ensemble 是否稳定高于当前 H200 本地最强单模 `dinov3-vitl-1024-timm = 0.4914`
+1. H200 本地最优 ensemble 是否稳定高于当前 H200 本地最强单模 `dinov3-vitl-896-timm = 0.4933`
 2. `postprocess` 是否带来稳定正增益，而不是只在个别组合上偶然加分
 3. `Dry_Dead_g / Dry_Clover_g` 是否明显改善
 
 如果满足以下任一条件，就进入 pseudo / online：
 
-- 最优 ensemble 相比 `0.4914` 有清晰正增益
+- 最优 ensemble 相比 `0.4933` 有清晰正增益
 - 总分提升有限，但 `Dry_Dead_g / Dry_Clover_g` 的负贡献明显收敛
 
 如果 ensemble 和 postprocess 都没有明显收益，就先停在分析阶段，不继续扩 pseudo 链路。
