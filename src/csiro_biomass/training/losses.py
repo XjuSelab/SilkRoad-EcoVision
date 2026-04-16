@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from csiro_biomass.data.constants import TARGET_COLUMNS, TARGET_TO_WEIGHT
+from csiro_biomass.data.constants import BASE_TARGET_COLUMNS, TARGET_COLUMNS, TARGET_TO_WEIGHT
+from csiro_biomass.models.dual_stream import FIVE_HEAD, THREE_HEAD_CONSTRAINED
 
 
 @dataclass(slots=True)
@@ -18,12 +19,20 @@ class LossOutput:
 
 
 class WeightedBiomassLoss(nn.Module):
-    def __init__(self, cls_weight: float = 0.3):
+    def __init__(self, cls_weight: float = 0.3, target_head_mode: str = FIVE_HEAD):
         super().__init__()
         self.regression_criterion = nn.SmoothL1Loss()
         self.classification_criterion = nn.CrossEntropyLoss()
         self.cls_weight = cls_weight
         self.weights = TARGET_TO_WEIGHT
+        self.target_head_mode = target_head_mode
+
+    def _classification_targets(self) -> list[str]:
+        if self.target_head_mode == THREE_HEAD_CONSTRAINED:
+            return list(BASE_TARGET_COLUMNS)
+        if self.target_head_mode == FIVE_HEAD:
+            return list(TARGET_COLUMNS)
+        raise ValueError(f"Unsupported target_head_mode: {self.target_head_mode}")
 
     def forward(
         self,
@@ -39,6 +48,9 @@ class WeightedBiomassLoss(nn.Module):
             regression_loss = regression_loss + weight * self.regression_criterion(
                 predictions["regression"][target_name], targets[:, idx]
             )
+
+        for idx, target_name in enumerate(self._classification_targets()):
+            weight = self.weights[target_name]
             classification_loss = classification_loss + weight * self.classification_criterion(
                 predictions["classification"][target_name], cls_labels[:, idx]
             )

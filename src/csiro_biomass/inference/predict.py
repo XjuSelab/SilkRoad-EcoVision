@@ -14,7 +14,7 @@ from csiro_biomass.data.constants import TARGET_COLUMNS
 from csiro_biomass.data.dataset import CSIROBiomassDataset, DatasetConfig
 from csiro_biomass.models.dual_stream import DualStreamBiomassModel, ModelConfig
 from csiro_biomass.utils.config import ensure_dir, load_yaml_config
-from csiro_biomass.utils.postprocess import apply_rule_based_postprocess, clamp_prediction_dict
+from csiro_biomass.utils.postprocess import apply_postprocess, clamp_prediction_dict, resolve_postprocess_strategy
 
 
 def _build_model_from_config(config: dict[str, Any], device: torch.device) -> DualStreamBiomassModel:
@@ -33,6 +33,7 @@ def _build_model_from_config(config: dict[str, Any], device: torch.device) -> Du
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
             num_attention_heads=int(config["model"].get("num_attention_heads", 8)),
             dropout=float(config["model"].get("dropout", 0.1)),
+            target_head_mode=config["model"].get("target_head_mode", "five_head"),
             hf_endpoint=config["model"].get("hf_endpoint"),
         )
     )
@@ -173,10 +174,14 @@ def run_inference(config: dict) -> None:
         ensemble[TARGET_COLUMNS] = ensemble[TARGET_COLUMNS].add(frame[TARGET_COLUMNS], fill_value=0.0)
     ensemble[TARGET_COLUMNS] = ensemble[TARGET_COLUMNS] / total_weight
 
-    if config["infer"].get("apply_postprocess", True):
+    strategy = resolve_postprocess_strategy(config["infer"])
+    if strategy != "none":
         processed_rows = []
+        postprocess_params = config["infer"].get("postprocess_params")
         for row in ensemble.to_dict("records"):
-            processed = clamp_prediction_dict(apply_rule_based_postprocess(row))
+            processed = clamp_prediction_dict(
+                apply_postprocess(row, strategy=strategy, params=postprocess_params)
+            )
             processed_rows.append({"image_id": row["image_id"], **processed})
         ensemble = pd.DataFrame(processed_rows)
 

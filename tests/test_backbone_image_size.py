@@ -1,13 +1,18 @@
 import torch
 
+from csiro_biomass.data.constants import BASE_TARGET_COLUMNS, TARGET_COLUMNS
 from csiro_biomass.models.backbone import BackboneConfig, create_backbone
-from csiro_biomass.models.dual_stream import DualStreamBiomassModel, ModelConfig
+from csiro_biomass.models.dual_stream import (
+    THREE_HEAD_CONSTRAINED,
+    DualStreamBiomassModel,
+    ModelConfig,
+)
 
 
 def test_timm_backbone_respects_custom_image_size() -> None:
     adapter = create_backbone(
         BackboneConfig(
-            name="vit_so400m_patch14_siglip_384",
+            name="vit_tiny_patch16_224",
             source="timm",
             pretrained=False,
             img_size=448,
@@ -19,7 +24,7 @@ def test_timm_backbone_respects_custom_image_size() -> None:
 def test_dual_stream_model_passes_image_size_to_timm_backbone() -> None:
     model = DualStreamBiomassModel(
         ModelConfig(
-            backbone_name="vit_so400m_patch14_siglip_384",
+            backbone_name="vit_tiny_patch16_224",
             backbone_source="timm",
             backbone_repo="facebookresearch/dinov3",
             pretrained=False,
@@ -28,10 +33,11 @@ def test_dual_stream_model_passes_image_size_to_timm_backbone() -> None:
             backbone_path=None,
             backbone_local_files_only=True,
             image_size=448,
-            fusion_dim=1152,
-            trunk_dim=1152,
+            fusion_dim=192,
+            trunk_dim=192,
             num_attention_heads=8,
             dropout=0.1,
+            target_head_mode="five_head",
             hf_endpoint=None,
         )
     )
@@ -40,3 +46,40 @@ def test_dual_stream_model_passes_image_size_to_timm_backbone() -> None:
     dummy = torch.randn(1, 3, 448, 448)
     outputs = model(dummy, dummy)
     assert outputs["regression"]["Dry_Green_g"].shape == (1,)
+
+
+def test_dual_stream_model_three_head_mode_derives_total_targets() -> None:
+    model = DualStreamBiomassModel(
+        ModelConfig(
+            backbone_name="vit_tiny_patch16_224",
+            backbone_source="timm",
+            backbone_repo="facebookresearch/dinov3",
+            pretrained=False,
+            backbone_weights=None,
+            backbone_check_hash=False,
+            backbone_path=None,
+            backbone_local_files_only=True,
+            image_size=448,
+            fusion_dim=192,
+            trunk_dim=192,
+            num_attention_heads=8,
+            dropout=0.1,
+            target_head_mode=THREE_HEAD_CONSTRAINED,
+            hf_endpoint=None,
+        )
+    )
+
+    dummy = torch.randn(2, 3, 448, 448)
+    outputs = model(dummy, dummy)
+    assert set(outputs["regression"]) == set(TARGET_COLUMNS)
+    assert set(outputs["classification"]) == set(BASE_TARGET_COLUMNS)
+    assert torch.allclose(
+        outputs["regression"]["GDM_g"],
+        outputs["regression"]["Dry_Green_g"] + outputs["regression"]["Dry_Clover_g"],
+    )
+    assert torch.allclose(
+        outputs["regression"]["Dry_Total_g"],
+        outputs["regression"]["Dry_Green_g"]
+        + outputs["regression"]["Dry_Dead_g"]
+        + outputs["regression"]["Dry_Clover_g"],
+    )

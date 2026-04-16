@@ -8,6 +8,7 @@ data:
 model:
   backbone_name: vit_huge_plus_patch16_dinov3
   backbone_source: timm
+  target_head_mode: three_head_constrained
   pretrained: true
   hf_endpoint: https://hf-mirror.com
   fusion_dim: 1280

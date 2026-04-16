@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-TARGET_COLUMNS = [
+BASE_TARGET_COLUMNS = [
     "Dry_Green_g",
     "Dry_Dead_g",
     "Dry_Clover_g",
+]
+
+DERIVED_TARGET_COLUMNS = [
     "GDM_g",
     "Dry_Total_g",
 ]
+
+TARGET_COLUMNS = [*BASE_TARGET_COLUMNS, *DERIVED_TARGET_COLUMNS]
 
 TARGET_TO_WEIGHT = {
     "Dry_Green_g": 0.1,

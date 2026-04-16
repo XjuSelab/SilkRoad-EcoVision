@@ -7,8 +7,11 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from csiro_biomass.data.constants import TARGET_COLUMNS
+from csiro_biomass.data.constants import BASE_TARGET_COLUMNS, TARGET_COLUMNS
 from csiro_biomass.models.backbone import BackboneConfig, create_backbone
+
+FIVE_HEAD = "five_head"
+THREE_HEAD_CONSTRAINED = "three_head_constrained"
 
 
 def build_three_layer_head(input_dim: int, output_dim: int, dropout: float) -> nn.Sequential:
@@ -39,12 +42,14 @@ class ModelConfig:
     trunk_dim: int
     num_attention_heads: int
     dropout: float
+    target_head_mode: str = FIVE_HEAD
     hf_endpoint: str | None = None
 
 
 class DualStreamBiomassModel(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
+        self.target_head_mode = config.target_head_mode
         self.backbone = create_backbone(
             BackboneConfig(
                 name=config.backbone_name,
@@ -75,12 +80,43 @@ class DualStreamBiomassModel(nn.Module):
             nn.GELU(),
             nn.Dropout(config.dropout),
         )
+        regression_targets = self._head_targets()
         self.regression_heads = nn.ModuleDict(
-            {target: build_three_layer_head(config.trunk_dim, 1, config.dropout) for target in TARGET_COLUMNS}
+            {target: build_three_layer_head(config.trunk_dim, 1, config.dropout) for target in regression_targets}
         )
         self.classification_heads = nn.ModuleDict(
-            {target: build_three_layer_head(config.trunk_dim, 7, config.dropout) for target in TARGET_COLUMNS}
+            {target: build_three_layer_head(config.trunk_dim, 7, config.dropout) for target in regression_targets}
         )
+
+    def _head_targets(self) -> list[str]:
+        if self.target_head_mode == THREE_HEAD_CONSTRAINED:
+            return list(BASE_TARGET_COLUMNS)
+        if self.target_head_mode == FIVE_HEAD:
+            return list(TARGET_COLUMNS)
+        raise ValueError(f"Unsupported target_head_mode: {self.target_head_mode}")
+
+    def _build_regression_outputs(self, shared: torch.Tensor) -> dict[str, torch.Tensor]:
+        if self.target_head_mode == FIVE_HEAD:
+            return {
+                target: self.regression_heads[target](shared).squeeze(-1) for target in TARGET_COLUMNS
+            }
+
+        green = self.regression_heads["Dry_Green_g"](shared).squeeze(-1)
+        dead = self.regression_heads["Dry_Dead_g"](shared).squeeze(-1)
+        clover = self.regression_heads["Dry_Clover_g"](shared).squeeze(-1)
+        gdm = green + clover
+        total = green + dead + clover
+        return {
+            "Dry_Green_g": green,
+            "Dry_Dead_g": dead,
+            "Dry_Clover_g": clover,
+            "GDM_g": gdm,
+            "Dry_Total_g": total,
+        }
+
+    def _build_classification_outputs(self, shared: torch.Tensor) -> dict[str, torch.Tensor]:
+        head_targets = self._head_targets()
+        return {target: self.classification_heads[target](shared) for target in head_targets}
 
     def freeze_backbone(
         self,
@@ -127,8 +163,6 @@ class DualStreamBiomassModel(nn.Module):
         combined = fused.reshape(fused.shape[0], -1)
         shared = self.trunk(combined)
 
-        regression = {
-            target: self.regression_heads[target](shared).squeeze(-1) for target in TARGET_COLUMNS
-        }
-        classification = {target: self.classification_heads[target](shared) for target in TARGET_COLUMNS}
+        regression = self._build_regression_outputs(shared)
+        classification = self._build_classification_outputs(shared)
         return {"regression": regression, "classification": classification}

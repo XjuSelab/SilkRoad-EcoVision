@@ -29,9 +29,13 @@ data/processed/csiro-biomass/folds/folds_v1.parquet
 - Input image is split into two `1000x1000` views by width.
 - Active DINOv3 single-model routes are `timm` and local `ModelScope/transformers`.
 - Legacy `torchhub` DINOv3 configs are archived under `configs/archive/torchhub/`.
-- Outputs include five regression heads and five 7-class interval-classification heads.
+- Active DINOv3 mainline uses a three-head constrained setup:
+  - direct heads: `Dry_Green_g`, `Dry_Dead_g`, `Dry_Clover_g`
+  - derived targets: `GDM_g = Dry_Green_g + Dry_Clover_g`
+  - derived targets: `Dry_Total_g = Dry_Green_g + Dry_Dead_g + Dry_Clover_g`
+- External outputs still keep the original five-target schema for OOF and submission files.
 - Loss is weighted `SmoothL1 + 0.3 * CrossEntropy`.
-- Post-processing follows the exact rule set quoted in the winning write-up.
+- Mainline post-processing follows the 3rd-place-inspired Clover/Dead scaling strategy, not the legacy winner-style blend rule.
 
 ## Notes on Scope
 

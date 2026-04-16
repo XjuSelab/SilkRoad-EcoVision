@@ -74,6 +74,17 @@ uv run python scripts/analyze_oof_ensemble.py \
   --top-n 20
 ```
 
+如果要基于当前单模 OOF 自动拟合 `Dry_Clover_g / Dry_Dead_g` 的 3rd 风格 scaling 参数，可以直接跑：
+
+```bash
+uv run python scripts/calibrate_third_place_postprocess.py \
+  --train-manifest data/processed/csiro-biomass/metadata/train_wide.parquet \
+  --prediction-path artifacts/server/dinov3-vitl-896-timm/oof_predictions.parquet \
+  --output-yaml artifacts/server/dinov3-vitl-896-timm/third-place-postprocess.yaml
+```
+
+生成的 YAML 可以直接传给 `scripts/analyze_oof_ensemble.py --postprocess-params-yaml ...`，或填进推理配置里的 `infer.postprocess_params`。
+
 ## 当前主线目标
 
 当前服务器主线不是为了提前做蒸馏，而是为了把 CSIRO 数据集上的分数做高。
@@ -135,15 +146,22 @@ uv run python scripts/analyze_oof_ensemble.py \
 5. 融合左右特征。  
    当前实现会把左右流特征投影后融合，再送入 trunk。
 
-6. 输出 `10` 个头。  
-   其中：
-   - `5` 个回归头直接预测目标值
-   - `5` 个区间分类头预测每个目标落在哪个区间
+6. 输出 constrained heads。  
+   当前 DINOv3 主线只直接预测：
+   - `Dry_Green_g`
+   - `Dry_Dead_g`
+   - `Dry_Clover_g`
+
+   同时只为这 `3` 个基础目标保留区间分类头。
+
+   另外两个评测目标不再单独建头，而是按关系式推导：
+   - `GDM_g = Dry_Green_g + Dry_Clover_g`
+   - `Dry_Total_g = Dry_Green_g + Dry_Dead_g + Dry_Clover_g`
 
 7. 计算 loss。  
    当前主损失是：
-   - `SmoothL1` 管回归误差
-   - `CrossEntropy` 管区间分类误差
+   - `SmoothL1` 仍对 `5` 个评测目标全部计算
+   - `CrossEntropy` 只对 `3` 个基础目标计算
 
 8. 反向传播并更新参数。  
    用 `AdamW` 按 batch 逐步更新模型参数。

@@ -5,10 +5,11 @@ from itertools import combinations
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from csiro_biomass.data.constants import TARGET_COLUMNS
 from csiro_biomass.training.metrics import compute_per_target_metrics, compute_weighted_r2_from_frame
-from csiro_biomass.utils.postprocess import apply_rule_based_postprocess, clamp_prediction_dict
+from csiro_biomass.utils.postprocess import apply_postprocess, clamp_prediction_dict
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-combination-size", type=int, default=1)
     parser.add_argument("--max-combination-size", type=int, default=4)
     parser.add_argument("--top-n", type=int, default=15, help="Number of top combinations to print")
+    parser.add_argument(
+        "--postprocess-strategy",
+        default="third_place_oof_scaled",
+        choices=["none", "winner_legacy", "third_place_oof_scaled"],
+        help="Postprocess strategy used for the secondary score columns.",
+    )
+    parser.add_argument(
+        "--postprocess-params-yaml",
+        help="Optional YAML file containing postprocess params, used by third_place_oof_scaled.",
+    )
     return parser
 
 
@@ -87,11 +98,19 @@ def build_validation_frame(truth_frame: pd.DataFrame, prediction_frame: pd.DataF
     return validation.rename(columns={target: f"{target}_true" for target in TARGET_COLUMNS})
 
 
-def apply_postprocess_to_predictions(prediction_frame: pd.DataFrame) -> pd.DataFrame:
+def apply_postprocess_to_predictions(
+    prediction_frame: pd.DataFrame,
+    *,
+    strategy: str,
+    params: dict | None,
+) -> pd.DataFrame:
+    if strategy == "none":
+        return prediction_frame.copy()
+
     wide = prediction_frame.rename(columns={f"{target}_pred": target for target in TARGET_COLUMNS})
     processed_rows = []
     for row in wide.to_dict("records"):
-        processed = clamp_prediction_dict(apply_rule_based_postprocess(row))
+        processed = clamp_prediction_dict(apply_postprocess(row, strategy=strategy, params=params))
         processed_rows.append({"image_id": row["image_id"], **processed})
     processed = pd.DataFrame(processed_rows)
     return processed.rename(columns={target: f"{target}_pred" for target in TARGET_COLUMNS})
@@ -172,6 +191,9 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    postprocess_params = None
+    if args.postprocess_params_yaml:
+        postprocess_params = yaml.safe_load(Path(args.postprocess_params_yaml).read_text(encoding="utf-8"))
 
     truth_frame = load_truth_frame(args.train_manifest)
 
@@ -198,7 +220,11 @@ def main() -> None:
             raw_metrics.insert(0, "combination_size", combination_size)
             raw_metrics.insert(0, "combination", combination_name)
 
-            post_predictions = apply_postprocess_to_predictions(averaged_predictions)
+            post_predictions = apply_postprocess_to_predictions(
+                averaged_predictions,
+                strategy=args.postprocess_strategy,
+                params=postprocess_params,
+            )
             post_score, post_metrics = evaluate_predictions(truth_frame, post_predictions)
             post_metrics = post_metrics.copy()
             post_metrics.insert(0, "mode", "postprocess")

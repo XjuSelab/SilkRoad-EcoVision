@@ -99,6 +99,7 @@ def _build_model(config: dict[str, Any], device: torch.device) -> DualStreamBiom
             trunk_dim=int(config["model"].get("trunk_dim", 1024)),
             num_attention_heads=int(config["model"].get("num_attention_heads", 8)),
             dropout=float(config["model"].get("dropout", 0.1)),
+            target_head_mode=config["model"].get("target_head_mode", "five_head"),
             hf_endpoint=config["model"].get("hf_endpoint"),
         )
     ).to(device)
@@ -173,7 +174,10 @@ def run_training_job(config: dict[str, Any]) -> Path:
             output_device=distributed.local_rank,
         )
 
-    criterion = WeightedBiomassLoss(cls_weight=float(config["train"].get("cls_weight", 0.3)))
+    criterion = WeightedBiomassLoss(
+        cls_weight=float(config["train"].get("cls_weight", 0.3)),
+        target_head_mode=config["model"].get("target_head_mode", "five_head"),
+    )
     scaler = torch.amp.GradScaler(device.type, enabled=device.type == "cuda")
     history: list[dict[str, Any]] = []
     best_score = float("-inf")
