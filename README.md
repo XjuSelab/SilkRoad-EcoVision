@@ -50,6 +50,7 @@ uv run csiro-biomass prepare-data --zip-path csiro-biomass.zip --extract-images
 
 ```bash
 bash scripts/train_modelscope_dinov3.sh 896
+bash scripts/train_timm_dinov3.sh 896
 ```
 
 4. 伪标签在线训练：
@@ -72,6 +73,9 @@ uv run csiro-biomass infer --config configs/infer-ensemble.yaml
 
 ```bash
 bash scripts/train_modelscope_dinov3.sh 896
+bash scripts/train_timm_dinov3.sh 896
+bash scripts/train_timm_dinov3.sh 1024
+bash scripts/train_timm_dinov3.sh hplus-896
 ```
 
 聚合 OOF：
